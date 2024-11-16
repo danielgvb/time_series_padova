@@ -117,6 +117,24 @@ df_rain_w <- df_rain_g %>%
 head(df_rain_m)
 head(df_rain_w)
 
+# temperature
+# montly
+df_temp_m <- temp %>%
+  mutate(month = floor_date(date, "month")) %>%
+  group_by(month) %>%
+  summarise(temp_m = mean(tavg))
+
+
+# weekly
+df_temp_w <- temp %>%
+  mutate(week = floor_date(date, "week")) %>%
+  group_by(week) %>%
+  summarise(temp_w = mean(tavg))
+
+head(df_temp_m)
+head(df_temp_w)
+
+
 # View data
 # sales daily
 ggplot(sales, aes(x=date, y=sales_cop)) +
@@ -150,6 +168,10 @@ ggplot(google_trends, aes(x=date, y=google_trends)) +
 # rain
 ggplot(df_rain_g, aes(x=date, y=rain_sum)) +
   geom_line() + ggtitle("Daily rain approximated in Antioquia")
+
+# rain
+ggplot(temp, aes(x=date, y=tavg)) +
+  geom_line() + ggtitle("Daily Average temperature in Medellin")
 
 
 
