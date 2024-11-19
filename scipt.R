@@ -305,3 +305,8 @@ summary(ols1)
 summary(ols2)
 summary(ols3)
 mflow(par = c(2,2))
+
+
+
+
+# esto es un comentario
