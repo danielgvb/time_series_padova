@@ -267,9 +267,37 @@ corrplot(cor_matrix_w, method = "color", type = "upper", tl.col = "black", tl.sr
 corrplot(cor_matrix_m, method = "color", type = "upper", tl.col = "black", tl.srt = 45)
 
 # Models--------------
+
+# Vars for model
+# Ensure the `month` column is in POSIXct format
+df_merged_m$month <- as.POSIXct(df_merged_m$month)
+
+# Create the numeric variable: an evenly increasing number
+df_merged_m <- df_merged_m %>%
+  arrange(month) %>%  # Ensure data is sorted by month
+  mutate(numeric_month = row_number())  # Assign an increasing number
+
+# Create the seasonal variable: the 12 different months as a factor
+df_merged_m <- df_merged_m %>%
+  mutate(seasonal_month = factor(format(month, "%B"), levels = month.name))  # Month names as ordered factors
+
+# View the updated dataframe
+head(df_merged_m)
+
+
+tail(df_merged_m)
+
+
+df_merged_m = subset(df_merged_m, select = -c(month) )
 ## Linear model-----------
-ols1 <- lm(sales_m ~., data=numeric_df_m)
-ols2 <- lm(sales_m ~ unemployment, data=numeric_df_m)
+ols1 <- lm(sales_m ~., data=df_merged_m)
+ols1 <- lm(sales_m ~numeric_month + unemployment + google_m, data=df_merged_m)
+
+summary(ols1)
+
+plot( numeric_df_m$google_m)
+plot( numeric_df_m$unemployment)
+
 ols2 <- lm(sales_m ~ unemployment + rain_m, data=numeric_df_m)
 ols3 <- lm(sales_w ~ rain_w + google_w, data=numeric_df_w)
 
