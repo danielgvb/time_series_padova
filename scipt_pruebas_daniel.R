@@ -143,7 +143,7 @@ head(df_temp_m)
 head(df_temp_w)
 
 
-# Plots----------------
+# View data
 # sales daily
 ggplot(sales, aes(x=date, y=sales_cop)) +
   geom_line() + ggtitle("Daily Sales of Restaurant")
