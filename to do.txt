@@ -1,0 +1,3 @@
+* add other columns to view sales  by food, bar, payment method...
+* see other explanatory variables
+* try ggm model
