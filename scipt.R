@@ -9,10 +9,17 @@ library(ggplot2)
 library(dplyr)
 library(lubridate)
 library(corrplot)
+library(feasts)
+library(tsibble)
+library(forecast)
 
+
+setwd("C:/Users/danie/Documents/")
 # Import Data--------------------------
 # target variable
 sales <- read_excel("GitHub/time_series_padova/data/sales/sales_dimsum_31102024.xlsx")
+
+sales[is.na(sales)] <-0
 # economic variables
 eco_growth <- read_excel("GitHub/time_series_padova/data/macroeconomic/economic_activity.xlsx")
 fx <- read_excel("GitHub/time_series_padova/data/macroeconomic/fx.xlsx")
@@ -36,6 +43,7 @@ str(temp) # this has NaNs, must fill somehow
 
 # create time variables
 
+plot(sales)
 
 # group data ---------
 
@@ -147,6 +155,31 @@ ggplot(df_sales_w, aes(x=week, y=sales_w)) +
 ggplot(df_sales_m, aes(x=month, y=sales_m)) +
   geom_line() + ggtitle("Monthly Sales of Restaurant")
 
+# seasonplot weekley
+
+# Season Plot mensual y semanal de las ventas-----------------
+
+df_sales_w_filtered <- df_sales_w %>%
+  filter(week >= ymd("2021-12-31"))
+
+
+
+tseries_w <- ts(df_sales_w_filtered$sales_w , start = c(2022, 1), frequency = 52)
+tseries_w
+seasonplot(tseries_w, col = rainbow(3), year.labels = TRUE, main = "Seasonal Plot")
+text(x = 1, y = max(tseries_w) - 1.5e7, labels = "2024", col = "blue")
+#seasonplot monthly
+
+head(df_sales_m)
+df_sales_m_filtered <- df_sales_m %>%
+  filter(month >= ymd("2021-12-31"))
+
+head(df_sales_m_filtered)
+
+tseries_m <- ts(df_sales_m_filtered$sales_m , start = c(2022, 1), frequency = 12)
+tseries_m
+seasonplot(tseries_m, col = rainbow(3), year.labels = TRUE, main = "Seasonal Plot")
+text(x = 1, y = max(tseries_m) - 1e6, labels = "2024", col = "blue")
 
 # economic growth
 ggplot(eco_growth, aes(x=date, y=ise_original)) +
