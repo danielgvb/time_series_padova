@@ -14,11 +14,8 @@ library(tsibble)
 library(forecast)
 library(tidyr)
 library(ggthemes)
-
-
-
 setwd("C:/Users/danie/Documents/")
-# Import Data--------------------------
+# 1. Import Data--------------------------
 # target variable
 sales <- read_excel("GitHub/time_series_padova/data/sales/sales_dimsum_31102024.xlsx")
 
@@ -52,8 +49,8 @@ str(temp) # this has NaNs, must fill somehow
 plot(sales$sales_cop)
 plot(sales$bar)
 plot(sales$food)
-
-# group data ---------
+# 2. Wrangle Data--------------
+## group data ---------
 
 # sales
 ## sales monthly
@@ -154,7 +151,55 @@ head(df_temp_m)
 head(df_temp_w)
 
 
-# Plots----------------
+
+
+## Merge--------------
+## daily data----------
+#sales, rain, fx are the only ones daily
+df_merged_d <- merge(sales, df_rain_g, by = "date", all = FALSE) # Inner join
+df_merged_d <- merge(df_merged_d, fx, by = "date", all = FALSE) # Inner join
+df_merged_d <- merge(df_merged_d, temp, by = "date", all = FALSE) # Inner join
+
+head(df_merged_d)
+
+### weekly data----------
+df_merged_w <- merge(df_sales_w, df_rain_w, by="week", all=F)
+df_merged_w <- merge(df_merged_w, df_google_w, by="week", all=F)
+df_merged_w <- merge(df_merged_w, df_fx_w, by="week", all=F)
+df_merged_w <- merge(df_merged_w, df_temp_w, by="week", all=F)
+
+head(df_merged_w)
+
+### monthly data----------
+# change colnames
+names(eco_growth) <- c("month", "ise")
+names(inflation) <- c("month", "inflation")
+names(unemployment) <- c("month", "unemployment") 
+
+df_merged_m <- merge(df_sales_m, df_rain_m, by="month", all=F)
+nrow(df_merged_m)
+df_merged_m <- merge(df_merged_m, df_fx_m, by="month", all=F)
+nrow(df_merged_m)
+df_merged_m <- merge(df_merged_m, df_google_m, by="month", all=F)
+nrow(df_merged_m)
+df_merged_m <- merge(df_merged_m, eco_growth, by="month", all=F) # only has until aug 2024
+nrow(df_merged_m)
+df_merged_m <- merge(df_merged_m, inflation, by="month", all=F)
+nrow(df_merged_m)
+df_merged_m <- merge(df_merged_m, unemployment, by="month", all=F)
+nrow(df_merged_m)
+
+df_merged_m <- merge(df_merged_m, df_temp_m, by="month", all=F)
+nrow(df_merged_m)
+
+# # Export to excel
+# install.packages("openxlsx")
+# library(openxlsx)
+# write.xlsx(df_merged_m, file = "df_merged_m.xlsx")
+# write.xlsx(df_merged_w, file = "df_merged_w.xlsx")
+# write.xlsx(df_merged_d, file = "df_merged_d.xlsx")
+
+# 3. Plots----------------
 # sales daily
 ggplot(sales, aes(x=date, y=sales_cop)) +
   geom_line() + ggtitle("Daily Sales of Restaurant")
@@ -251,54 +296,8 @@ ggplot(temp, aes(x=date, y=prcp)) +
 
 
 
-# Merge--------------
-## daily data----------
-#sales, rain, fx are the only ones daily
-df_merged_d <- merge(sales, df_rain_g, by = "date", all = FALSE) # Inner join
-df_merged_d <- merge(df_merged_d, fx, by = "date", all = FALSE) # Inner join
-df_merged_d <- merge(df_merged_d, temp, by = "date", all = FALSE) # Inner join
-
-head(df_merged_d)
-
-## weekly data----------
-df_merged_w <- merge(df_sales_w, df_rain_w, by="week", all=F)
-df_merged_w <- merge(df_merged_w, df_google_w, by="week", all=F)
-df_merged_w <- merge(df_merged_w, df_fx_w, by="week", all=F)
-df_merged_w <- merge(df_merged_w, df_temp_w, by="week", all=F)
-
-head(df_merged_w)
-
-## monthly data----------
-# change colnames
-names(eco_growth) <- c("month", "ise")
-names(inflation) <- c("month", "inflation")
-names(unemployment) <- c("month", "unemployment") 
-
-df_merged_m <- merge(df_sales_m, df_rain_m, by="month", all=F)
-nrow(df_merged_m)
-df_merged_m <- merge(df_merged_m, df_fx_m, by="month", all=F)
-nrow(df_merged_m)
-df_merged_m <- merge(df_merged_m, df_google_m, by="month", all=F)
-nrow(df_merged_m)
-df_merged_m <- merge(df_merged_m, eco_growth, by="month", all=F) # only has until aug 2024
-nrow(df_merged_m)
-df_merged_m <- merge(df_merged_m, inflation, by="month", all=F)
-nrow(df_merged_m)
-df_merged_m <- merge(df_merged_m, unemployment, by="month", all=F)
-nrow(df_merged_m)
-
-df_merged_m <- merge(df_merged_m, df_temp_m, by="month", all=F)
-nrow(df_merged_m)
-
-# # Export to excel
-# install.packages("openxlsx")
-# library(openxlsx)
-# write.xlsx(df_merged_m, file = "df_merged_m.xlsx")
-# write.xlsx(df_merged_w, file = "df_merged_w.xlsx")
-# write.xlsx(df_merged_d, file = "df_merged_d.xlsx")
-
-
-# Metrics -------------
+# 4. EDA------------
+## Correlation -------------
 
 # Exclude 'date' column
 numeric_df_d <- df_merged_d[, sapply(df_merged_d, is.numeric)]
@@ -314,7 +313,7 @@ cor_matrix_m <- cor(numeric_df_m, use = "complete.obs")  # Use only complete row
 cor_matrix_m
 
 
-# Plots----------
+### Plots----------
 # Plot the Correlation Matrix
 corrplot(cor_matrix_d, method = "color", type = "upper", tl.col = "black", tl.srt = 45)
 corrplot(cor_matrix_w, method = "color", type = "upper", tl.col = "black", tl.srt = 45)
@@ -348,7 +347,7 @@ df_merged_m <- df_merged_m %>%
   mutate(across(where(is.numeric) & !all_of(c("unemployment", "inflation")), ~ log(. + 1)))
 
 
-# Autocorrelation--------------
+## Autocorrelation--------------
 # convert to time series
 sales_d_ts <- ts(df_merged_d$sales_cop)
 sales_w_ts <- ts(df_merged_w$sales_w)
@@ -368,7 +367,7 @@ tsdisplay(sales_m_ts)
 # has clear trend, no seasonality
 
 
-# Models----------------
+#5.  Models----------------
 ## Linear models-----------
 ### Monthly----------------
 # Model 0, just trend
