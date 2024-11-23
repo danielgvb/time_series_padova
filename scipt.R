@@ -14,6 +14,7 @@ library(tsibble)
 library(forecast)
 library(tidyr)
 library(ggthemes)
+library(car)
 setwd("C:/Users/danie/Documents/")
 # 1. Import Data--------------------------
 # target variable
@@ -32,6 +33,7 @@ google_trends <- read_excel("GitHub/time_series_padova/data/other/google_trends_
 rain <- read_excel("GitHub/time_series_padova/data/other/rain_proxy.xlsx")
 temp <- read_excel("GitHub/time_series_padova/data/other/temperature_data.xlsx")
 temp[is.na(temp)] <- 0
+rain[is.na(rain)] <- 0
 plot(temp$tavg) # no zeros in temp : OK
 
 # Explore data structure
@@ -193,7 +195,7 @@ df_merged_m <- merge(df_merged_m, df_temp_m, by="month", all=F)
 nrow(df_merged_m)
 
 # # Export to excel
-# install.packages("openxlsx")
+
 # library(openxlsx)
 # write.xlsx(df_merged_m, file = "df_merged_m.xlsx")
 # write.xlsx(df_merged_w, file = "df_merged_w.xlsx")
@@ -263,7 +265,8 @@ seasonplot(tseries_m, col = rainbow(3), year.labels = TRUE, main = "Seasonal Plo
 text(x = 1, y = max(tseries_m) - 1e6, labels = "2024", col = "blue")
 
 # economic growth
-ggplot(eco_growth, aes(x=date, y=ise_original)) +
+
+ggplot(eco_growth, aes(x=month, y=ise)) +
   geom_line() + ggtitle("Monthly activity in Colombia")
 
 # fx
@@ -271,11 +274,11 @@ ggplot(fx, aes(x=date, y=fx)) +
   geom_line() + ggtitle("Daily COP/USD")
 
 # inflation
-ggplot(inflation, aes(x=date, y=inflation)) +
+ggplot(inflation, aes(x=month, y=inflation)) +
   geom_line() + ggtitle("Monthly inflation National")
 
 # unemployment
-ggplot(unemployment, aes(x=date, y=unemployment)) +
+ggplot(unemployment, aes(x=month, y=unemployment)) +
   geom_line() + ggtitle("Montly trailing unemployment Medellin")
 
 # google trends
@@ -295,9 +298,8 @@ ggplot(temp, aes(x=date, y=prcp)) +
   geom_line() + ggtitle("Daily  precipitation in Medellin")
 
 
-
-# 4. EDA------------
-## Correlation -------------
+# 4. EDA-----------------------
+## Correlation -----------------
 
 # Exclude 'date' column
 numeric_df_d <- df_merged_d[, sapply(df_merged_d, is.numeric)]
@@ -315,14 +317,21 @@ cor_matrix_m
 
 ### Plots----------
 # Plot the Correlation Matrix
+par(mfrow=c(1,1))
 corrplot(cor_matrix_d, method = "color", type = "upper", tl.col = "black", tl.srt = 45)
 corrplot(cor_matrix_w, method = "color", type = "upper", tl.col = "black", tl.srt = 45)
 corrplot(cor_matrix_m, method = "color", type = "upper", tl.col = "black", tl.srt = 45)
 
+# rain has stronger correl than prcp
+# drop prcp beacuse they "are the same"
+df_merged_m <- df_merged_m %>% select(-prcp_m)
+df_merged_w <- df_merged_w %>% select(-prcp_w)
+df_merged_d <- df_merged_d %>% select(-prcp)
 
 
 # Variable Transformation-------------
 # Vars for model
+# Month
 # Ensure the `month` column is in POSIXct format
 df_merged_m$month <- as.POSIXct(df_merged_m$month)
 
@@ -335,16 +344,36 @@ df_merged_m <- df_merged_m %>%
 df_merged_m <- df_merged_m %>%
   mutate(seasonal_month = factor(format(month, "%B"), levels = month.name))  # Month names as ordered factors
 
-# View the updated dataframe
-head(df_merged_m)
+# Week
+# Ensure the `week` column is in POSIXct format
+df_merged_w$week <- as.POSIXct(df_merged_w$week)
 
+# Create the numeric variable: an evenly increasing number
+df_merged_w <- df_merged_w %>%
+  arrange(week) %>%  # Ensure data is sorted by week
+  mutate(numeric_week = row_number())  # Assign an increasing number
 
-tail(df_merged_m)
+# Create the seasonal variable: the 12 different months as a factor
+df_merged_w <- df_merged_w %>%
+  mutate(seasonal_month = factor(format(week, "%B"), levels = month.name))  # Month names as ordered factors
 
-#df_merged_m = subset(df_merged_m, select = -c(month) )
-## Log transformation----------
-df_merged_m <- df_merged_m %>%
-  mutate(across(where(is.numeric) & !all_of(c("unemployment", "inflation")), ~ log(. + 1)))
+# Day
+# Ensure the `day` column is in POSIXct format
+df_merged_d$date <- as.POSIXct(df_merged_d$date)
+
+# Create the numeric variable: an evenly increasing number
+df_merged_d <- df_merged_d %>%
+  arrange(date) %>%  # Ensure data is sorted by day
+  mutate(numeric_day = row_number())  # Assign an increasing number
+
+# Create the seasonal variable: the 12 different months as a factor
+df_merged_d <- df_merged_d %>%
+  mutate(seasonal_month = factor(format(date, "%B"), levels = month.name))  # Month names as ordered factors
+
+# Create a column indicating the day of the week
+df_merged_d <- df_merged_d %>%
+  mutate(day_of_week = factor(weekdays(date), levels = c("Monday", "Tuesday", "Wednesday", 
+                                                        "Thursday", "Friday", "Saturday", "Sunday")))  # Day of the week as ordered factor
 
 
 ## Autocorrelation--------------
@@ -366,18 +395,32 @@ tsdisplay(sales_w_ts)
 tsdisplay(sales_m_ts)
 # has clear trend, no seasonality
 
+#df_merged_m = subset(df_merged_m, select = -c(month) )
+## Log transformation----------
+# Monthly
+df_merged_m <- df_merged_m %>%
+  mutate(across(where(is.numeric) & !all_of(c("unemployment", "inflation")), ~ log(. + 1)))
+
+# Weekly
+df_merged_w <- df_merged_w %>%
+  mutate(across(where(is.numeric), ~ log(. + 1)))
+
+# Daily
+# Weekly
+df_merged_d <- df_merged_d %>%
+  mutate(across(where(is.numeric), ~ log(. + 1)))
 
 #5.  Models----------------
 ## Linear models-----------
 ### Monthly----------------
+# see the dataframe
+head(df_merged_m)
 # Model 0, just trend
-ols0 <- lm(sales_m ~ month, data=df_merged_m)
+ols0 <- lm(sales_m ~ numeric_month, data=df_merged_m)
 summary(ols0)
 par(mfrow = c(2,2))
 plot(ols0)
 df_merged_m$predicted_sales0 <- predict(ols0, newdata = df_merged_m)
-
-
 # month is significant, but poor fitting
 
 # Model 1: trend + season
@@ -391,9 +434,9 @@ df_merged_m$predicted_sales1 <- predict(ols1, newdata = df_merged_m)
 
 # Plot actual vs predicted values for both models
 ggplot(df_merged_m, aes(x = month)) +
-  geom_line(aes(y = sales_m, color = "Actual Sales"), size = 1) +
-  geom_line(aes(y = predicted_sales0, color = "Predicted Sales (Model 0)"), linetype = "dashed", size = 1) +
-  geom_line(aes(y = predicted_sales1, color = "Predicted Sales (Model 1)"), linetype = "dotted", size = 1) +
+  geom_line(aes(y = exp(sales_m), color = "Actual Sales"), size = 1) +
+  geom_line(aes(y = exp(predicted_sales0), color = "Predicted Sales (Model 0)"), linetype = "dashed", size = 1) +
+  geom_line(aes(y = exp(predicted_sales1), color = "Predicted Sales (Model 1)"), linetype = "dotted", size = 1) +
   labs(title = "Actual vs Predicted Monthly Sales",
        x = "Month",
        y = "Sales",
@@ -404,11 +447,11 @@ ggplot(df_merged_m, aes(x = month)) +
 
 # Model 2
 # Initial model (ols2_full)
-ols2_full <- lm(sales_m ~ numeric_month + seasonal_month + unemployment + ise + fx_m + google_m + temp_m + prcp_m, data = df_merged_m)
+ols2_full <- lm(sales_m ~ numeric_month + seasonal_month + unemployment + ise + fx_m + google_m + temp_m + rain_m, data = df_merged_m)
 summary(ols2_full)
 
 # Drop seasonal_month (rename model to ols2_no_seasonal_month)
-ols2_no_seasonal_month <- lm(sales_m ~ numeric_month + unemployment + ise + fx_m + google_m + temp_m + prcp_m, data = df_merged_m)
+ols2_no_seasonal_month <- lm(sales_m ~ numeric_month + unemployment + ise + fx_m + google_m + temp_m + rain_m, data = df_merged_m)
 summary(ols2_no_seasonal_month)
 
 # Perform ANOVA test between ols2_full and ols2_no_seasonal_month
@@ -416,31 +459,36 @@ anova(ols2_full, ols2_no_seasonal_month)
 # P-value > 0.05: can drop seasonal comp
 
 # Drop ise (rename model to ols2_no_seasonal_month_no_ise)
-ols2_no_seasonal_month_no_ise <- lm(sales_m ~ numeric_month + unemployment + fx_m + google_m + temp_m + prcp_m, data = df_merged_m)
+ols2_no_seasonal_month_no_ise <- lm(sales_m ~ numeric_month + unemployment + fx_m + google_m + temp_m + rain_m, data = df_merged_m)
 summary(ols2_no_seasonal_month_no_ise)
 
 # Perform ANOVA test between ols2_no_seasonal_month and ols2_no_seasonal_month_no_ise
 anova(ols2_no_seasonal_month, ols2_no_seasonal_month_no_ise)
 # p-value > 0.05: drop ISE
 
-# Drop unemployment (rename model to ols2_no_seasonal_month_no_ise_no_unemployment)
-ols2_no_seasonal_month_no_ise_no_unemployment <- lm(sales_m ~ numeric_month + fx_m + google_m + temp_m + prcp_m, data = df_merged_m)
-summary(ols2_no_seasonal_month_no_ise_no_unemployment)
+# Drop rain
+ols2_no_rain <- lm(sales_m ~ numeric_month + unemployment + fx_m + google_m + temp_m, data = df_merged_m)
+summary(ols2_no_rain)
 
-# Perform ANOVA test between ols2_no_seasonal_month_no_ise and ols2_no_seasonal_month_no_ise_no_unemployment
-anova(ols2_no_seasonal_month_no_ise, ols2_no_seasonal_month_no_ise_no_unemployment)
-# p-value > 0.05: drop unemployment
-
-ols2_final <- ols2_no_seasonal_month_no_ise_no_unemployment
+anova(ols2_no_seasonal_month_no_ise, ols2_no_rain)
+# can drop, pvalue >0.05
+ols2_final <- ols2_no_rain
 summary(ols2_final)
-# residuals have some structure, there is something else going on
 plot(ols2_final)
+# residuals have some structure, there is something else going on
+
+# check for co-linearity
+vif_values <- vif(ols2_final)
+print(vif_values)
+
+# Unemployment and Numeric Month have kind of high values of multicolinearity
+
 # predictions
 df_merged_m$predicted_sales2 <- predict(ols2_final, newdata = df_merged_m)
 # plot of actual vs predicted values
 ggplot(df_merged_m, aes(x = month)) +
-  geom_line(aes(y = sales_m, color = "Actual Sales"), size = 1) +
-  geom_line(aes(y = predicted_sales2, color = "Predicted Sales (Model 2)"), linetype = "dashed", size = 1) +
+  geom_line(aes(y = exp(sales_m), color = "Actual Sales"), size = 1) +
+  geom_line(aes(y = exp(predicted_sales2), color = "Predicted Sales (Model 2)"), linetype = "dashed", size = 1) +
   labs(title = "Actual vs Predicted Monthly Sales (Model 2)",
        x = "Month",
        y = "Sales",
@@ -450,10 +498,10 @@ ggplot(df_merged_m, aes(x = month)) +
 
 
 ggplot(df_merged_m, aes(x = month)) +
-  geom_line(aes(y = sales_m, color = "Actual Sales"), size = 1) +
-  geom_line(aes(y = predicted_sales0, color = "Predicted Sales (Model 0)"), linetype = "dashed", size = 1) +
-  geom_line(aes(y = predicted_sales1, color = "Predicted Sales (Model 1)"), linetype = "dotted", size = 1) +
-  geom_line(aes(y = predicted_sales2, color = "Predicted Sales (Model 2)"), linetype = "dotdash", size = 1) +
+  geom_line(aes(y = exp(sales_m), color = "Actual Sales"), size = 1) +
+  geom_line(aes(y = exp(predicted_sales0), color = "Predicted Sales (Model 0)"), linetype = "dashed", size = 1) +
+  geom_line(aes(y = exp(predicted_sales1), color = "Predicted Sales (Model 1)"), linetype = "dotted", size = 1) +
+  geom_line(aes(y = exp(predicted_sales2), color = "Predicted Sales (Model 2)"), linetype = "dotdash", size = 1) +
   labs(title = "Actual vs Predicted Monthly Sales for Models 0, 1, and 2",
        x = "Month",
        y = "Sales",
@@ -463,20 +511,36 @@ ggplot(df_merged_m, aes(x = month)) +
 
 
 ### Weekly----------------
-colnames(df_merged_w)
-# Create the seasonal_month column based on the week column
-df_merged_w <- df_merged_w %>%
-  mutate(seasonal_month = factor(format(week, "%m")))
 
-# Optional: Convert the factor to have month names instead of numbers
-df_merged_w <- df_merged_w %>%
-  mutate(seasonal_month = factor(format(week, "%B"), levels = month.name))
+head(df_merged_w)
+# Drop first two weeks bc there were no sales
+df_merged_w <- df_merged_w %>% slice(-1, -2)
+head(df_merged_w)
 
-# Model 1A
+# Model 0A
 colnames(df_merged_w)
-ols1w <- lm(sales_w ~week + seasonal_month, data=df_merged_w)
+ols0w <- lm(sales_w ~numeric_week, data=df_merged_w)
+summary(ols0w)
+plot(ols0w)
+df_merged_w$predicted_sales0 <- predict(ols0w, newdata = df_merged_w)
+
+# Model 1A: Trend and seasonality
+ols1w <- lm(sales_w ~numeric_week + seasonal_month, data=df_merged_w)
 summary(ols1w)
 plot(ols1w)
+df_merged_w$predicted_sales1 <- predict(ols1w, newdata = df_merged_w)
+
+# plot models
+ggplot(df_merged_w, aes(x = week)) +
+  geom_line(aes(y = exp(sales_w), color = "Actual Sales"), size = 1) +
+  geom_line(aes(y = exp(predicted_sales0), color = "Model 0"), linetype = "dashed", size = 1) +
+  geom_line(aes(y = exp(predicted_sales1), color = "Model 1"), linetype = "dotted", size = 1) +
+  labs(title = "Actual vs Predicted  Sales",
+       x = "Week",
+       y = "Sales",
+       color = "Legend") +
+  theme_economist() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 ## Time Series Models--------------
 # 
