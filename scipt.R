@@ -15,6 +15,7 @@ library(forecast)
 library(tidyr)
 library(ggthemes)
 library(car)
+library(DIMORA)
 setwd("C:/Users/danie/Documents/")
 # 1. Import Data--------------------------
 # target variable
@@ -542,5 +543,148 @@ ggplot(df_merged_w, aes(x = week)) +
   theme_economist() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-## Time Series Models--------------
-# 
+
+# Model 2A: Experiments
+colnames(df_merged_w)
+ols2w_full <- lm(sales_w ~numeric_week + seasonal_month+
+                   rain_w + google_w + temp_w, data=df_merged_w)
+summary(ols2w_full)
+# Drop seasonal month
+ols2w_a <- lm(sales_w ~numeric_week +
+                   rain_w + google_w + temp_w, data=df_merged_w)
+summary(ols2w_a)
+anova(ols2w_full, ols2w_a)
+
+# p-value > a, so can drop seasonal month
+# now drop google
+ols2w_b <- lm(sales_w ~numeric_week +
+                rain_w + temp_w, data=df_merged_w)
+summary(ols2w_b)
+anova(ols2w_a, ols2w_b)
+# p-value > a, so can drop google, now all vars are statistically significant
+
+df_merged_w$predicted_sales2 <- predict(ols2w_b, newdata = df_merged_w)
+
+# plot models
+ggplot(df_merged_w, aes(x = week)) +
+  geom_line(aes(y = exp(sales_w), color = "Actual Sales"), size = 1) +
+  geom_line(aes(y = exp(predicted_sales0), color = "Model 0"), linetype = "dashed", size = 1) +
+  geom_line(aes(y = exp(predicted_sales1), color = "Model 1"), linetype = "dashed", size = 1) +
+  geom_line(aes(y = exp(predicted_sales2), color = "Model 2"), linetype = "dashed", size = 1) +
+  labs(title = "Actual vs Predicted  Sales",
+       x = "Week",
+       y = "Sales",
+       color = "Legend") +
+  theme_economist() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+### Daily---------------------
+head(df_merged_d,20)
+# drop first 18 days, sales are 0
+df_merged_d <- df_merged_d %>%
+  filter(sales_cop != 0)
+head(df_merged_d)
+
+# Check column names for the daily dataframe
+colnames(df_merged_d)
+
+# Model 0A: Simple linear regression
+ols0d <- lm(sales_cop ~ numeric_day, data = df_merged_d)
+summary(ols0d)
+plot(ols0d)
+# residuals are clearly not normal
+
+df_merged_d$predicted_sales0 <- predict(ols0d, newdata = df_merged_d)
+
+# Model 1A: Trend and seasonality (day and month)
+ols1d <- lm(sales_cop ~ numeric_day + seasonal_month + day_of_week, data = df_merged_d)
+summary(ols1d)
+plot(ols1d)
+df_merged_d$predicted_sales1 <- predict(ols1d, newdata = df_merged_d)
+
+
+ggplot(df_merged_d, aes(x = date)) +
+  geom_point(aes(y = exp(sales_cop), color = "Actual Sales"), size = 2) + # Actual sales as dots
+  geom_line(aes(y = exp(predicted_sales0), color = "Model 0"),  size = 1) + # Model 0 as solid line
+  geom_line(aes(y = exp(predicted_sales1), color = "Model 1"),linetype ="dashed", size = 1) + # Model 1 as solid line
+  labs(title = "Actual vs Predicted Sales (Daily)",
+       x = "Day",
+       y = "Sales",
+       color = "Legend") +
+  theme_economist() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+# Full model and var selection
+colnames(df_merged_d)
+ols2d_full <- lm(sales_cop ~ numeric_day + seasonal_month + day_of_week+
+                   rain_sum + tavg, data = df_merged_d)
+summary(ols2d_full)
+plot(ols2d_full)
+# Looks like sesonal month does not matter
+ols2d_a <- lm(sales_cop ~ numeric_day + day_of_week+
+                   rain_sum + tavg, data = df_merged_d)
+summary(ols2d_a)
+anova(ols2d_full, ols2d_a)
+# According to anova, cannot remove because there is extra information, 
+# but only september matters, and for no other model it has been insightfull
+# should have impact in july, august, december and february, which has not
+# so we still remove it
+df_merged_d$predicted_sales2 <- predict(ols2d_a, newdata = df_merged_d)
+
+ggplot(df_merged_d, aes(x = date)) +
+  geom_point(aes(y = exp(sales_cop), color = "Actual Sales"), size = 2) + # Actual sales as dots
+  geom_line(aes(y = exp(predicted_sales2), color = "Model 2"),linetype ="dashed", size = 1) + # Model 2 as dashed line
+  labs(title = "Actual vs Predicted Sales (Daily)",
+       x = "Day",
+       y = "Sales",
+       color = "Legend") +
+  theme_economist() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+## Time Series----------------
+# After running models we see that there is still room to improve so we turn to time series modelling
+### Monthly---------
+# Check for autocorrelation 
+tsdisplay(sales_m_ts)
+# Sales have trend on the monthly series
+#### BASS Model--------------
+# Simple model
+bm_m<-BM(sales_m_ts,display = T) # show graphical view of results / display = True
+
+summary(bm_m)
+sum(sales$sales_cop)
+# Fits well but the 30- onward is wierd + sales might not be declining yet
+# Still reflects the innovation and copying in some sense
+# Also the restaurants rely in word of mouth to reach full stage
+# m = 4.451.570.000 COP, i.e 1 mm EUR approx. / The restaurant has sold 3.515.788.885
+# according to this only in 1 year it should extinguish sells
+# p, innovation: 0.847% indicates that the adoption rate due to external 
+# influence is relatively low, but not uncommon for many markets. - it is actually relativly innovative
+# q: (9.416%) suggests that imitation plays a larger role than 
+# innovation in driving adoption in this market
+
+bm_w<-BM(sales_w_ts,display = T) # show graphical view of results / display = True
+summary(bm_w)
+#### forecast:-------------------
+
+# Forecast the next 12 periods
+forecast_bm_m <- forecast.BM(bm_m, h = 12)
+
+# Display the forecasted values
+print(forecast_bm_w)
+
+# Optionally, visualize the forecast
+plot(forecast_bm_w, main = "Bass Model Forecast for the Next 12 Periods",
+     xlab = "Time", ylab = "Sales")
+
+# market potential similar, but p and q different (more periodicity)
+
+#### GGM-------------
+# Runs on DIMORA
+# documentation: https://cran.rstudio.com/web/packages/DIMORA/DIMORA.pdf
+# bass model preliminary m, p, q for algorithm
+sp = c(1.69062e+06,2.60513e-03,3.20522e-02,1.00000e-03,1.00000e-01) 
+ggm1 <- GGM(sales_m_ts, prelimestimates = sp, display = T)
+ggm2 <- GGM(sales_m_ts, mt= function(x) pchisq(x,10),display = T)
+summary(ggm1)
+
