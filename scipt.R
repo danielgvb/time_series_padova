@@ -4,8 +4,10 @@
 # Sales of DimSum Records, Asian-food restaurant in Medellin, Colombia
 
 # Required Packages--------------------
+rm(list = ls())
 library(readxl)
 library(ggplot2)
+library(GGally)
 library(dplyr)
 library(lubridate)
 library(corrplot)
@@ -16,26 +18,26 @@ library(tidyr)
 library(ggthemes)
 library(car)
 library(DIMORA)
-setwd("C:/Users/danie/Documents/")
 # 1. Import Data--------------------------
 # target variable
-sales <- read_excel("GitHub/time_series_padova/data/sales/sales_dimsum_31102024.xlsx")
+sales <- read_excel("data/sales/sales_dimsum_31102024.xlsx")
 
 sales[is.na(sales)] <- 0
 
 # economic variables
-eco_growth <- read_excel("GitHub/time_series_padova/data/macroeconomic/economic_activity.xlsx")
-fx <- read_excel("GitHub/time_series_padova/data/macroeconomic/fx.xlsx")
-inflation <- read_excel("GitHub/time_series_padova/data/macroeconomic/inflation.xlsx")
-unemployment <- read_excel("GitHub/time_series_padova/data/macroeconomic/unemployment.xlsx")
+eco_growth <- read_excel("data/macroeconomic/economic_activity.xlsx")
+fx <- read_excel("data/macroeconomic/fx.xlsx")
+inflation <- read_excel("data/macroeconomic/inflation.xlsx")
+unemployment <- read_excel("data/macroeconomic/unemployment.xlsx")
 
 # other variables
-google_trends <- read_excel("GitHub/time_series_padova/data/other/google_trends_restaurantes.xlsx")
-rain <- read_excel("GitHub/time_series_padova/data/other/rain_proxy.xlsx")
-temp <- read_excel("GitHub/time_series_padova/data/other/temperature_data.xlsx")
+google_trends <- read_excel("data/other/google_trends_restaurantes.xlsx")
+rain <- read_excel("data/other/rain_proxy.xlsx")
+temp <- read_excel("data/other/temperature_data.xlsx")
 temp[is.na(temp)] <- 0
 rain[is.na(rain)] <- 0
 plot(temp$tavg) # no zeros in temp : OK
+plot(temp$tmedian) # no zeros in temp : OK- looks better than mean
 
 # Explore data structure
 str(sales)
@@ -141,14 +143,14 @@ head(df_rain_w)
 df_temp_m <- temp %>%
   mutate(month = floor_date(date, "month")) %>%
   group_by(month) %>%
-  summarise(temp_m = mean(tavg), prcp_m = sum(prcp))
+  summarise(temp_m = mean(tmedian), prcp_m = sum(prcp))
 
 
 # weekly
 df_temp_w <- temp %>%
   mutate(week = floor_date(date, "week")) %>%
   group_by(week) %>%
-  summarise(temp_w = mean(tavg), prcp_w = sum(prcp))
+  summarise(temp_w = mean(tmedian), prcp_w = sum(prcp))
 
 head(df_temp_m)
 head(df_temp_w)
@@ -202,7 +204,11 @@ nrow(df_merged_m)
 # write.xlsx(df_merged_w, file = "df_merged_w.xlsx")
 # write.xlsx(df_merged_d, file = "df_merged_d.xlsx")
 
+
+
+
 # 3. Plots----------------
+## 3.1 Sales----------------
 # sales daily
 ggplot(sales, aes(x=date, y=sales_cop)) +
   geom_line() + ggtitle("Daily Sales of Restaurant")
@@ -214,7 +220,33 @@ ggplot(df_sales_w, aes(x=week, y=sales_w)) +
 ggplot(df_sales_m, aes(x=month, y=sales_m)) +
   geom_line() + ggtitle("Monthly Sales of Restaurant")
 
-#Stacked sales
+## 3.2 Food-------------------
+
+# sales daily
+ggplot(sales, aes(x=date, y=food)) +
+  geom_line() + ggtitle("Daily Sales of Restaurant - Food")
+# sales weekly
+ggplot(df_sales_w, aes(x=week, y=food_w)) +
+  geom_line() + ggtitle("Weekly Sales of Restaurant - Food")
+
+# sales montly
+ggplot(df_sales_m, aes(x=month, y=food_m)) +
+  geom_line() + ggtitle("Monthly Sales of Restaurant - Food")
+
+## 3.3 Bar------------------------
+
+# sales daily
+ggplot(sales, aes(x=date, y=bar)) +
+  geom_line() + ggtitle("Daily Sales of Restaurant - Bar")
+# sales weekly
+ggplot(df_sales_w, aes(x=week, y=bar_w)) +
+  geom_line() + ggtitle("Weekly Sales of Restaurant - Bar")
+
+# sales montly
+ggplot(df_sales_m, aes(x=month, y=bar_m)) +
+  geom_line() + ggtitle("Monthly Sales of Restaurant - Bar")
+
+## 3.3 Combined Sales------------
 
 #Monthly
 # Reshape the data to a long format
@@ -241,11 +273,9 @@ ggplot(df_sales_w_long, aes(x = week, y = Value, fill = Category)) +
   theme_minimal()
 
 
-
-# Seasonal plots
+## 3.4 Seasonal plots-------------------------
 df_sales_w_filtered <- df_sales_w %>%
   filter(week >= ymd("2021-12-31"))
-
 
 
 tseries_w <- ts(df_sales_w_filtered$sales_w , start = c(2022, 1), frequency = 52)
@@ -265,8 +295,9 @@ tseries_m
 seasonplot(tseries_m, col = rainbow(3), year.labels = TRUE, main = "Seasonal Plot")
 text(x = 1, y = max(tseries_m) - 1e6, labels = "2024", col = "blue")
 
+## 3.5 Covariates ----------------------
+### 3.5.1 economic variables-----------------------
 # economic growth
-
 ggplot(eco_growth, aes(x=month, y=ise)) +
   geom_line() + ggtitle("Monthly activity in Colombia")
 
@@ -282,6 +313,8 @@ ggplot(inflation, aes(x=month, y=inflation)) +
 ggplot(unemployment, aes(x=month, y=unemployment)) +
   geom_line() + ggtitle("Montly trailing unemployment Medellin")
 
+### 3.5.2 Other variables
+
 # google trends
 ggplot(google_trends, aes(x=date, y=google_trends)) +
   geom_line() + ggtitle("Weelkly Google trends 'Restaurantes'")
@@ -291,16 +324,36 @@ ggplot(df_rain_g, aes(x=date, y=rain_sum)) +
   geom_line() + ggtitle("Daily rain approximated in Antioquia")
 
 # temperature
+ggplot(temp, aes(x=date, y=tmedian)) +
+  geom_line() + ggtitle("Daily Median temperature in Medellin")
+
+# temperature
 ggplot(temp, aes(x=date, y=tavg)) +
   geom_line() + ggtitle("Daily Average temperature in Medellin")
+
+# this one looks weird, better keep working on median
 
 # precipitation from temp
 ggplot(temp, aes(x=date, y=prcp)) +
   geom_line() + ggtitle("Daily  precipitation in Medellin")
 
 
+## 3.6 Pairplot-----------------
+df_merged_d <- subset(df_merged_d, select = -region)
+
+ggpairs(df_merged_d, 
+        columns = 2:8)
+
+ggpairs(df_merged_w, 
+        columns = 2:9)
+
+ggpairs(df_merged_m, 
+        columns = 2:12)
+
+
+
 # 4. EDA-----------------------
-## Correlation -----------------
+## 4.1 Correlation -----------------
 
 # Exclude 'date' column
 numeric_df_d <- df_merged_d[, sapply(df_merged_d, is.numeric)]
@@ -329,6 +382,9 @@ df_merged_m <- df_merged_m %>% select(-prcp_m)
 df_merged_w <- df_merged_w %>% select(-prcp_w)
 df_merged_d <- df_merged_d %>% select(-prcp)
 
+# drop avg temp
+df_merged_d <- df_merged_d %>% select(-tavg)
+colnames(df_merged_d)
 
 # Variable Transformation-------------
 # Vars for model
@@ -412,7 +468,7 @@ df_merged_d <- df_merged_d %>%
   mutate(across(where(is.numeric), ~ log(. + 1)))
 
 #5.  Models----------------
-## Linear models-----------
+## 5.1 Linear models-----------
 ### Monthly----------------
 # see the dataframe
 head(df_merged_m)
@@ -618,12 +674,12 @@ ggplot(df_merged_d, aes(x = date)) +
 # Full model and var selection
 colnames(df_merged_d)
 ols2d_full <- lm(sales_cop ~ numeric_day + seasonal_month + day_of_week+
-                   rain_sum + tavg, data = df_merged_d)
+                   rain_sum + tmedian, data = df_merged_d)
 summary(ols2d_full)
 plot(ols2d_full)
 # Looks like sesonal month does not matter
 ols2d_a <- lm(sales_cop ~ numeric_day + day_of_week+
-                   rain_sum + tavg, data = df_merged_d)
+                   rain_sum + tmedian, data = df_merged_d)
 summary(ols2d_a)
 anova(ols2d_full, ols2d_a)
 # According to anova, cannot remove because there is extra information, 
@@ -641,7 +697,7 @@ ggplot(df_merged_d, aes(x = date)) +
        color = "Legend") +
   theme_economist() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-## Time Series----------------
+## 5.2 Time Series----------------
 # After running models we see that there is still room to improve so we turn to time series modelling
 ### Monthly---------
 # Check for autocorrelation 
