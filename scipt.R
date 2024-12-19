@@ -18,6 +18,8 @@ library(tidyr)
 library(ggthemes)
 library(car)
 library(DIMORA)
+library(tseries)
+library(lmtest)
 # 1. Import Data--------------------------
 # target variable
 sales <- read_excel("data/sales/sales_dimsum_31102024.xlsx")
@@ -592,6 +594,33 @@ add_predictions <- function(model, data, pred_column) {
   data[[pred_column]] <- predict(model, newdata = data)
   return(data)
 }
+
+
+# function that compares linear models
+# Define the function to get R^2 and AIC
+get_model_stats <- function(models) {
+  # Initialize an empty data frame
+  stats <- data.frame(
+    Model = character(),
+    R2 = numeric(),
+    AIC = numeric(),
+    stringsAsFactors = FALSE
+  )
+  
+  # Loop through the list of models
+  for (i in seq_along(models)) {
+    model <- models[[i]]
+    model_name <- names(models)[i]
+    # Extract R^2 and AIC
+    r2 <- summary(model)$r.squared
+    aic <- AIC(model)
+    # Append to the data frame
+    stats <- rbind(stats, data.frame(Model = model_name, R2 = r2, AIC = aic))
+  }
+  
+  return(stats)
+}
+
 ## 5.1 Linear Models Sales-------------------------------------------------------
 ### Monthly Models ----------------------------------------------------------
 
@@ -641,6 +670,22 @@ ggplot(df_merged_m, aes(x = month)) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+
+# Models to compare
+models <- list(
+  "Model trend" = ols0,
+  "Model trend + season" = ols1,
+  "Model all covariates step" = ols2_stepwise
+)
+
+# Get R^2 and AIC for each model
+model_stats <- get_model_stats(models)
+
+# View the results
+print(model_stats)
+
+
+
 ### Weekly Models -----------------------------------------------------------
 head(df_merged_w)
 ## Clean Data - Drop rows 1-2 because sales are 0 / was not open yet
@@ -689,6 +734,19 @@ ggplot(df_merged_w, aes(x = week)) +
        x = "Week", y = "Sales", color = "Legend") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Models to compare
+models_w <- list(
+  "Model trend" = ols0w,
+  "Model trend + season" = ols1w,
+  "Model all covariates step" = ols2_stepwise_w
+)
+
+# Get R^2 and AIC for each model
+model_stats_w <- get_model_stats(models_w)
+
+# View the results
+print(model_stats_w)
 
 
 
@@ -743,8 +801,21 @@ ggplot(df_merged_d, aes(x = date)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 
+# Models to compare
+models_d <- list(
+  "Model trend" = ols0d,
+  "Model trend + season" = ols1d,
+  "Model all covariates step" = ols2_stepwise_d
+)
 
-## 5.2 Linear Model Food----------------
+# Get R^2 and AIC for each model
+model_stats_d <- get_model_stats(models_d)
+
+# View the results
+print(model_stats_d)
+
+
+## 5.2 Linear Model FOOD----------------
 
 ### Monthly Models ----------------------------------------------------------
 
@@ -884,10 +955,9 @@ ggplot(df_merged_d, aes(x = date)) +
 
 # 6 Non Linear Models----------------
 ## 6.1 Difussion Models----------------
-## BASS Model--------------
+## 6.1.1 BASS Model--------------
 ### Monthly---------
-
-# Simple model
+# simple Bass model
 bm_m<-BM(sales_m_ts,display = T) # show graphical view of results / display = True
 
 summary(bm_m)
@@ -906,7 +976,23 @@ bm_m$coefficients['m'] - sum(sales_m_ts)
 # q: (8.96%) suggests that imitation plays a larger role than 
 # innovation in driving adoption in this market
 
-## Weekly--------------
+
+
+# Prediction
+pred_bm_m<- predict(bm_m, newx=c(1:length(sales_m_ts)))
+pred.inst_bm_m<- make.instantaneous(pred_bm_m)
+
+
+# Plot of fitted model 
+plot(sales_m_ts, type= "b",xlab="month", ylab="Monthly sales",  pch=16, lty=3, xaxt="n", cex=0.6)
+lines(pred.inst_bm_m, lwd=2, col=2)
+
+# check residuals
+res_bm_m <- sales_m_ts - pred.inst_bm_m
+tsdisplay(res_bm_m)
+# clear trend still in residuals
+
+### Weekly------------------------------------------------
 
 bm_w<-BM(sales_w_ts,display = T) # show graphical view of results / display = True
 summary(bm_w)
@@ -917,8 +1003,22 @@ bm_m$coefficients['q'] / bm_w$coefficients['q'] # they are approx 4 times
 bm_m$coefficients['p'] / bm_w$coefficients['p'] # they are approx 4 times
 # which makes sense
 
+# Prediction
+pred_bm_w<- predict(bm_w, newx=c(1:length(sales_w_ts)))
+pred.inst_bm_w<- make.instantaneous(pred_bm_w)
 
-## Daily--------------
+
+# Plot of fitted model 
+plot(sales_w_ts, type= "b",xlab="month", ylab="Weekly sales",  pch=16, lty=3, xaxt="n", cex=0.6)
+lines(pred.inst_bm_w, lwd=2, col=2)
+
+# check residuals
+res_bm_w <- sales_w_ts - pred.inst_bm_w
+tsdisplay(res_bm_w)
+
+# clear trend and structure in the residuals
+
+### Daily--------------
 
 bm_d<-BM(sales_d_ts,display = T) # show graphical view of results / display = True
 summary(bm_d)
@@ -929,18 +1029,71 @@ bm_w$coefficients['q'] / bm_d$coefficients['q'] # they are approx 7 times
 bm_w$coefficients['p'] / bm_d$coefficients['p'] # they are approx 7 times
 # which makes sense
 
+# Prediction
+pred_bm_d<- predict(bm_d, newx=c(1:length(sales_d_ts)))
+pred.inst_bm_d<- make.instantaneous(pred_bm_d)
+
+
+# Plot of fitted model 
+plot(sales_d_ts, type= "b",xlab="month", ylab="Daily sales",  pch=16, lty=3, xaxt="n", cex=0.6)
+lines(pred.inst_bm_d, lwd=2, col=2)
+
+# check residuals
+res_bm_d <- sales_d_ts - pred.inst_bm_d
+tsdisplay(res_bm_d)
 
 
 
+## 6.1.2 Generalized Bass--------------
+#### Mothly--------------------------
+# Shock on 4 up
+#GBM_m<- GBM(sales_m_ts,shock = "exp",nshock = 1,prelimestimates = c(4.463368e+04, 1.923560e-03, 9.142022e-02, 
+#                                                                    ,38,-0.1))
 
-#### GGM-------------
+## 6.1.3 GGM-------------
 # Runs on DIMORA
 # documentation: https://cran.rstudio.com/web/packages/DIMORA/DIMORA.pdf
 # bass model preliminary m, p, q for algorithm
+
+# mt argument is the determination of market potential
 sp = c(1.69062e+06,2.60513e-03,3.20522e-02,1.00000e-03,1.00000e-01) 
 ggm1 <- GGM(sales_m_ts, prelimestimates = sp, display = T)
-ggm2 <- GGM(sales_m_ts, mt= function(x) pchisq(x,10),display = T)
-summary(ggm1)
+ggm2 <- GGM(sales_m_ts, mt='base', display = T)
+ggm3 <- GGM(sales_m_ts, mt= function(x) pchisq(x,10),display = T)
+summary(ggm2)
+summary(ggm3)
+# try different functions for market potential
 
+ggm4 <- GGM(sales_m_ts, mt= function(x) log(x),display = T)
+ggm4 <- GGM(sales_m_ts, mt= function(x) (x)**(1/1.05),display = T)
+summary(ggm4)
+# predictions
 
+pred_GGM_m<- predict(ggm2, newx=c(1:length(sales_m_ts)))
+pred_GGM_m.inst<- make.instantaneous(pred_GGM_m)
+
+plot(sales_m_ts, type= "b",xlab="Month", ylab="Monthly Sales",  pch=16, lty=3, cex=0.6)
+lines(pred_GGM_m.inst, lwd=2, col=2)
+
+###Analysis of residuals
+res_GGM_m<- sales_m_ts - pred_GGM_m.inst
+pred_GGM_m
+tsdisplay(res_GGM_m)
+
+plot(c(1:length(res_GGM_m)),res_GGM_m)
+
+# Residuals somehow are kind of stationary
+# check for stationarity of residuals
+adf_test <- adf.test(res_GGM_m)
+print(adf_test) # if p-val < alpha, series stationary
+# so with this model we achieve stationary series
+
+# check for autocorrelation in residuals
+Box.test(res_GGM_m, lag = 10, type = "Ljung-Box") # h0 res indep
+# p-val > alpha => fail to reject h0, so residuals seem indep
+
+# TO DO---------------------
+# add residuals to best linear models
+# get R2, RMSE of best linear models
+# Do test on all residuals, DW, JB.....
 
