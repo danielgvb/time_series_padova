@@ -1518,37 +1518,114 @@ tsdisplay(resid_sarimax3_seasonal, lag.max = 30)
 summary(ggm1_w) # this one is best model found
 
 
-pred_GGM_w<- predict(ggm1_w, newx=c(1:length(sales_w_ts)))
+pred_GGM_w<- predict(ggm1_w, newx=matrix(1:length(sales_w_ts), ncol=1))
 pred_GGM_w.inst<- make.instantaneous(pred_GGM_w)
+pred_GGM_w.inst
+
+# set same timeframe for GGM preds
+start_time_w <- start(sales_w_ts)  # Get start time from sales_w_ts
+frequency_w <- frequency(sales_w_ts)  # Get frequency from sales_w_ts
+
+# Convert pred_GGM to a numeric vector
+pred_GGM_w_vec <- unlist(pred_GGM_w.inst)  # Flatten the list to a numeric vector
+# Create the time series for pred_GGM
+pred_GGM_w_ts <- ts(pred_GGM_w_vec, start = start_time_w, frequency = frequency_w)
+
 
 plot(sales_w_ts, type= "b",xlab="Week", ylab="Weekly Sales",  pch=16, lty=3, cex=0.6)
-lines(pred_GGM_w.inst, lwd=2, col=2)
+lines(pred_GGM_w_ts, col = "red", lty = 2)
 
 
+#### SARMAX refinement------------------------
 
 
-##SARMAX refinement
+fit.sales_w <- fitted(ggm1_w)  # Predicted values from the GGM model
 
+if (length(fit.sales_w) != length(sales_w_ts)) {
+  stop("fit.sales_w and sales_w_ts lengths do not match")
+}
 
-fit.sales_w<- fitted(ggm1_w)
-sarima_w <- Arima(cumsum(sales_w_ts), order = c(1,0,1), seasonal=list(order=c(0,0,1), period=52), xreg = fit.sales_w)
+summary(fit.sales_w) 
+length(fit.sales_w) == length(cumsum(sales_w_ts))  # Should return TRUE
+
+fit.sales_w <- scale(fit.sales_w) # scale regresor to make convergence
+
+sales_w_ts_scaled <- scale(cumsum(sales_w_ts))  # Scale the time series because if not will not reach convergence
+sarima_w <- Arima(
+  sales_w_ts_scaled, 
+  order = c(1, 0, 1), 
+  seasonal = list(order = c(0, 0, 1), period = 52), 
+  xreg = fit.sales_w
+)
+
 summary(sarima_w)
-#
-pres2 <- make.instantaneous(fitted(s2))
-#
-##Plots observed vs predicted with SARMAX refinement
-plot(int, type= "b",xlab="week", ylab="Weekly Google searches",  pch=16, lty=3, cex=0.6, xaxt="n", col=colors[3])
-axis(1, at=c(1,18,36,54,72,90), labels=format(week[c(1,18,36,54,72,90)], "%d/%m/%y"))
-lines(tfine150[-1], pred.gbme1goi*100, lwd=1, lty=2)
-lines(pres2, lty=1,lwd=1)
-legend("topright", legend=c("GBMe1","GBMe1+SARMAX"), lty=c(2,1))
-#
-plot(cumsum(int), type= "b",xlab="week", ylab="Cumulative Google searches",  pch=16, lty=3, cex=0.6, xaxt="n", col=colors[3])
-axis(1, at=c(1,18,36,54,72,90), labels=format(week[c(1,18,36,54,72,90)], "%d/%m/%y"))
-lines(tfine150, pred.gbme1go, lwd=1, lty=2)
-lines(cumsum(pres2), lty=1,lwd=1)
-legend("bottomright", legend=c("GBMe1","GBMe1+SARMAX"), lty=c(2,1))
 
+# get fitted values
+# Extract the fitted cumulative values from the SARIMA model
+fitted_cumulative <- fitted(sarima_w)
+
+# Reverse scaling transformation to get fitted cumulative values in the original scale
+scaling_center <- attr(sales_w_ts_scaled, "scaled:center")
+scaling_scale <- attr(sales_w_ts_scaled, "scaled:scale")
+
+fitted_cumulative_original <- fitted_cumulative * scaling_scale + scaling_center
+
+# Convert cumulative fitted values to instantaneous values
+fitted_instantaneous <- diff(c(fitted_cumulative_original, NA))  # Add NA to align lengths
+
+# Create a time series object for the fitted instantaneous values
+fitted_instantaneous_ts <- ts(
+  fitted_instantaneous, 
+  start = start(sales_w_ts), 
+  frequency = frequency(sales_w_ts)
+)
+
+# Check the fitted instantaneous values
+plot(fitted_instantaneous_ts)
+
+
+# plot
+
+# Plot original instantaneous values vs fitted instantaneous values
+plot(sales_w_ts, type = "p", col = "blue", pch = 16,
+     main = "Original vs Fitted Instantaneous Values",
+     xlab = "Time", ylab = "Instantaneous Values")
+
+# Add the fitted instantaneous values as a line
+lines(fitted_instantaneous_ts, col = "red", lwd = 3, lty = 1)
+
+# Add legend
+legend("topright", legend = c("Original Instantaneous", "Fitted Instantaneous"),
+       col = c("blue", "red"), lty = c(NA, 1), pch = c(16, NA), lwd = c(NA, 3))
+
+#### Residuals-----------------------
+# Step 1: Extract residuals from the SARIMA model
+resid_w <- residuals(sarima_w)
+
+# Step 2: Visualize residuals
+# Time series plot of residuals
+tsdisplay(resid_w, main = "Residual Diagnostics for SARIMA Model")
+
+# Step 3: Test residuals for stationarity
+adf_test <- adf.test(resid_w)
+cat("ADF Test p-value:", adf_test$p.value, "\n")
+
+if (adf_test$p.value < 0.05) {
+  cat("The residuals are stationary.\n")
+} else {
+  cat("The residuals are not stationary.\n")
+}
+
+# Step 4: Test residuals for white noise (no autocorrelation)
+
+ljung_box_test <- Box.test(resid_w, lag = 20, type = "Ljung-Box")
+cat("Ljung-Box Test p-value:", ljung_box_test$p.value, "\n")
+
+if (ljung_box_test$p.value > 0.05) {
+  cat("The residuals resemble white noise (uncorrelated).\n")
+} else {
+  cat("The residuals show significant autocorrelation.\n")
+}
 
 
 # 9. GAM-----------------------------
