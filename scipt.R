@@ -1274,6 +1274,7 @@ autoplot(sales_m_ts)+
 
 
 #### Weekly------------------------------
+tsdisplay(sales_m_ts)
 autoplot(sales_w_ts)
 head(df_merged_w)
 head(sales_w_ts)
@@ -1305,6 +1306,8 @@ autoplot(sales_bimonthly_ts)+
 # 7. ARIMA Models----------------------------
 ## 7.1 Standard ARIMA---------------------------------
 ## Montly------------------
+
+plot(sales_m_ts)
 # see if series is stationary
 adf.test(sales_m_ts) #H0, series is non-stationary
 # p-val > 0.05 => dont reject, non stationary: series is not stationary
@@ -1510,6 +1513,8 @@ Box.test(resid_sarimax3_seasonal, lag = 10, type = "Ljung-Box")
 tsdisplay(resid_sarimax3_seasonal, lag.max = 30)
 # we see lags with correlation
 
+checkresiduals(resid_sarimax3_seasonal)
+
 # 8. Model Mixture--------------
 ## 8.1 GGM + SARIMA----------------
 ### Weekly------------------------------
@@ -1551,11 +1556,12 @@ length(fit.sales_w) == length(cumsum(sales_w_ts))  # Should return TRUE
 fit.sales_w <- scale(fit.sales_w) # scale regresor to make convergence
 
 sales_w_ts_scaled <- scale(cumsum(sales_w_ts))  # Scale the time series because if not will not reach convergence
+
 sarima_w <- Arima(
   sales_w_ts_scaled, 
   order = c(1, 0, 1), 
   seasonal = list(order = c(0, 0, 1), period = 52), 
-  xreg = fit.sales_w
+  xreg = fit.sales_w # this is the GGM fitted values
 )
 
 summary(sarima_w)
@@ -1628,7 +1634,7 @@ if (ljung_box_test$p.value > 0.05) {
 }
 
 
-# 9. GAM-----------------------------
+# 9. Gradient Boosting-----------------------------
 # 10. Prophet--------------------------
 # TO DO---------------------
 # add residuals to best linear models
