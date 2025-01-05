@@ -1,0 +1,1432 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+# Project Business Economic and Financial Data
+
+## Sales of DimSum Records, Asian-food restaurant in Medellin, Colombia
+
+2024/2025
+
+Authors: Daniel Gutierrez & Fabio Pimentel
+
+```{r}
+# Required Packages--------------------
+library(readxl)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(corrplot)
+library(feasts)
+library(tsibble)
+library(forecast)
+library(tidyr)
+library(ggthemes)
+library(car)
+library(DIMORA)
+```
+
+### Import Data
+
+```{r}
+setwd('/Users/fabiopimentel/Documents/Padua/clases/segundo año primer semestre/BEF data/proyecto/time_series_padova-main')
+
+# target variable
+sales <- read_excel("data/sales/sales_dimsum_31102024.xlsx")
+
+sales[is.na(sales)] <- 0 # set to zero na values
+
+```
+
+### Creating variables
+
+```{r}
+# economic variables
+eco_growth <- read_excel("data/macroeconomic/economic_activity.xlsx")
+fx <- read_excel("data/macroeconomic/fx.xlsx") #Foreign exchange is the conversion of one currency into another
+inflation <- read_excel("data/macroeconomic/inflation.xlsx")
+unemployment <- read_excel("data/macroeconomic/unemployment.xlsx")
+```
+
+```{r}
+# other variables
+google_trends <- read_excel("data/other/google_trends_restaurantes.xlsx")
+rain <- read_excel("data/other/rain_proxy.xlsx")
+temp <- read_excel("data/other/temperature_data.xlsx")
+temp[is.na(temp)] <- 0
+rain[is.na(rain)] <- 0
+plot(temp$tavg) # no zeros in temp : OK
+```
+
+### Explore data structure
+
+```{r}
+str(sales)
+```
+
+```{r}
+str(eco_growth)
+```
+
+```{r}
+str(fx) # Foreign exchange is the conversion of one currency into another
+```
+
+```{r}
+str(inflation)
+```
+
+```{r}
+str(unemployment)
+```
+
+```{r}
+str(google_trends)
+```
+
+```{r}
+str(rain)
+```
+
+```{r}
+str(temp) # this has NaNs, must fill somehow
+```
+
+### Sales
+
+```{r}
+# create time variables
+plot(sales$sales_cop)
+```
+
+### Sales Monthly
+
+```{r}
+# sales
+## sales monthly
+df_sales_m <- sales %>%
+  mutate(month = floor_date(date, "month")) %>% # Extract month
+  group_by(month) %>%
+  summarise(sales_m = sum(sales_cop), bar_m = sum(bar), food_m = sum(food)
+  )     # Summing values
+
+head(df_sales_m)
+```
+
+### Sales Weekly
+
+```{r}
+## sales weekly
+df_sales_w <- sales %>%
+  mutate(week = floor_date(date, "week")) %>% # Extract month
+  group_by(week) %>%
+  summarise(sales_w = sum(sales_cop), bar_w = sum(bar), food_w = sum(food))     # Summing values
+
+head(df_sales_w)
+```
+
+### FX
+
+```{r}
+# fx
+df_fx_m <- fx %>%
+  mutate(month = floor_date(date, "month")) %>%
+  group_by(month) %>%
+  summarise(fx_m = mean(fx))
+
+df_fx_w <- fx %>%
+  mutate(week = floor_date(date, "week")) %>%
+  group_by(week) %>%
+  summarise(fx_w = mean(fx))
+
+head(df_fx_m)
+head(df_fx_w)
+```
+
+### Google Trends
+
+```{r}
+# google trends
+
+# montly
+df_google_m <- google_trends %>%
+  mutate(month = floor_date(date, "month")) %>%
+  group_by(month) %>%
+  summarise(google_m = mean(google_trends))
+
+
+# weekly
+df_google_w <- google_trends %>%
+  mutate(week = floor_date(date, "week")) %>%
+  group_by(week) %>%
+  summarise(google_w = mean(google_trends))
+
+head(df_google_m)
+head(df_google_w)
+```
+
+### Rain
+
+```{r}
+## rain
+df_rain_g = rain %>%
+  group_by(date, region) %>%
+  summarise(rain_sum=sum(contribution_m3s))
+
+df_rain_g  <- df_rain_g[df_rain_g$region=="ANTIOQUIA",]
+
+head(df_rain_g)
+
+# montly
+df_rain_m <- df_rain_g %>%
+  mutate(month = floor_date(date, "month")) %>%
+  group_by(month) %>%
+  summarise(rain_m = sum(rain_sum))
+
+
+# weekly
+df_rain_w <- df_rain_g %>%
+  mutate(week = floor_date(date, "week")) %>%
+  group_by(week) %>%
+  summarise(rain_w = sum(rain_sum))
+
+head(df_rain_m)
+head(df_rain_w)
+```
+
+### Temperature
+
+```{r}
+# temperature
+# montly
+df_temp_m <- temp %>%
+  mutate(month = floor_date(date, "month")) %>%
+  group_by(month) %>%
+  summarise(temp_m = mean(tavg), prcp_m = sum(prcp))
+
+
+# weekly
+df_temp_w <- temp %>%
+  mutate(week = floor_date(date, "week")) %>%
+  group_by(week) %>%
+  summarise(temp_w = mean(tavg), prcp_w = sum(prcp))
+
+head(df_temp_m)
+head(df_temp_w)
+```
+
+## Merging Data Frames
+
+#### Daily Data
+
+```{r}
+## daily data----------
+#sales, rain, fx are the only ones daily
+df_merged_d <- merge(sales, df_rain_g, by = "date", all = FALSE) # Inner join
+df_merged_d <- merge(df_merged_d, fx, by = "date", all = FALSE) # Inner join
+df_merged_d <- merge(df_merged_d, temp, by = "date", all = FALSE) # Inner join
+
+head(df_merged_d)
+
+```
+
+#### Weekly Data
+
+```{r}
+### weekly data----------
+df_merged_w <- merge(df_sales_w, df_rain_w, by="week", all=F)
+df_merged_w <- merge(df_merged_w, df_google_w, by="week", all=F)
+df_merged_w <- merge(df_merged_w, df_fx_w, by="week", all=F)
+df_merged_w <- merge(df_merged_w, df_temp_w, by="week", all=F)
+
+head(df_merged_w)
+```
+
+#### Monthly Data
+
+```{r}
+### monthly data----------
+# change colnames
+names(eco_growth) <- c("month", "ise")
+names(inflation) <- c("month", "inflation")
+names(unemployment) <- c("month", "unemployment") 
+
+df_merged_m <- merge(df_sales_m, df_rain_m, by="month", all=F)
+nrow(df_merged_m)
+
+df_merged_m <- merge(df_merged_m, df_fx_m, by="month", all=F)
+nrow(df_merged_m)
+
+df_merged_m <- merge(df_merged_m, df_google_m, by="month", all=F)
+nrow(df_merged_m)
+
+df_merged_m <- merge(df_merged_m, eco_growth, by="month", all=F) # only has until aug 2024
+nrow(df_merged_m)
+
+df_merged_m <- merge(df_merged_m, inflation, by="month", all=F)
+nrow(df_merged_m)
+
+df_merged_m <- merge(df_merged_m, unemployment, by="month", all=F)
+nrow(df_merged_m)
+
+df_merged_m <- merge(df_merged_m, df_temp_m, by="month", all=F)
+nrow(df_merged_m)
+```
+
+### Plotting Sales
+
+#### Daily Sales
+
+```{r}
+# sales daily
+ggplot(
+  sales, 
+  aes(x=date, y=sales_cop)
+  ) + geom_line() + ggtitle("Daily Sales of Restaurant")
+```
+
+#### Weekly sales
+
+```{r}
+# sales weekly
+ggplot(df_sales_w, aes(x=week, y=sales_w)) +
+  geom_line() + ggtitle("Weekly Sales of Restaurant")
+```
+
+#### Monthly sales
+
+```{r}
+# sales montly
+ggplot(df_sales_m, aes(x=month, y=sales_m)) +
+  geom_line() + ggtitle("Monthly Sales of Restaurant")
+```
+
+#### Stacked bar plots
+
+We want to move to a stacked bar chart when we care about the relative
+decomposition of each primary bar based on the levels of a second
+categorical variable. Each bar is now comprised of a number of sub-bars,
+each one corresponding with a level of a secondary categorical variable.
+The total length of each stacked bar is the same as before, but now we
+can see how the secondary groups contributed to that total.
+
+One important consideration in building a stacked bar chart is to decide
+which of the two categorical variables will be the primary variable
+(dictating major axis positions and overall bar lengths) and which will
+be the secondary (dictating how each primary bar will be subdivided).
+The most 'important' variable should be the primary; use domain
+knowledge and the specific type of categorical variables to make a
+decision on how to assign your categorical variables
+
+```{r}
+#Monthly
+# Reshape the data to a long format
+df_sales_m_long <- df_sales_m %>%
+  pivot_longer(cols = c(bar_m, food_m), names_to = "Category", values_to = "Value")
+
+# Create the stacked bar plot
+ggplot(df_sales_m_long, aes(x = month, y = Value, fill = Category)) +
+  geom_bar(stat = "identity", position = "stack") +
+  ggtitle("Monthly Sales of Restaurant") +
+  labs(y = "Sales", x = "Month", fill = "Category") +
+  theme_minimal()
+```
+
+```{r}
+# Weekly
+# Reshape the data to a long format
+df_sales_w_long <- df_sales_w %>%
+  pivot_longer(cols = c(bar_w, food_w), names_to = "Category", values_to = "Value")
+
+# Create the stacked bar plot
+ggplot(df_sales_w_long, aes(x = week, y = Value, fill = Category)) +
+  geom_bar(stat = "identity", position = "stack") +
+  ggtitle("Weekly Sales of Restaurant") +
+  labs(y = "Sales", x = "Week", fill = "Category") +
+  theme_minimal()
+```
+
+#### Seasonal plots
+
+```{r}
+# Seasonal plots
+df_sales_w_filtered <- df_sales_w %>%
+  filter(week >= ymd("2021-12-31"))
+
+tseries_w <- ts(df_sales_w_filtered$sales_w, 
+                start = c(2022, 1), 
+                frequency = 52
+                )
+tseries_w
+
+ggseasonplot(tseries_w, 
+           col = rainbow(3), 
+           year.labels = TRUE,
+           main = "Seasonal Plot"
+           )  + theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))
+
+```
+
+```{r}
+# seasonplot monthly
+head(df_sales_m)
+df_sales_m_filtered <- df_sales_m %>% filter(month >= ymd("2021-12-31"))
+head(df_sales_m_filtered)
+
+tseries_m <- ts(df_sales_m_filtered$sales_m , start = c(2022, 1), frequency = 12)
+tseries_m
+
+ggseasonplot(tseries_m, col = rainbow(3), year.labels = TRUE, main = "Seasonal Plot")
+```
+
+### Variable Transformation
+
+POSIXct and POSIXlt Classes
+
+Times and date-times are represented by the POSIXct or the POSIXlt class
+in R. The POSIXct format stores date and time in seconds with the number
+of seconds beginning at January 1, 1970, so a POSIXct date-time is
+essentially an single value on a timeline. Date-times prior to 1970,
+will be negative numbers. The POSIXlt class stores other date and time
+information in a list such as hour of day of week, month of year, etc.
+The starting year for POSIXlt data is 1900, so 2022 would be stored as
+year 122. Months also begin at 0, so January is stored as month 0 and
+February as month 1. For both POSIX classes, the timezone can be
+classified. While date-times stored as POSIXct and POSIXlt look similar,
+when you unclass them with the unclass() function, you can see the
+additional information stored within the POSIXlt data.
+
+Date Class
+
+Dates without time can simply be stored as a Date class in R using the
+as.Date() function. Both Dates and POXIC classes need to be defined
+based on how they formatted. When uploading time series data into R,
+date and date-time data is typically uploaded as a character class and
+must be converted to date or time class using the as.Date(),
+as.POSIXct() or as.POSIXlt() functions.
+
+Monthly
+
+```{r}
+# Vars for model
+# Month
+# Ensure the `month` column is in POSIXct format
+df_merged_m$month <- as.POSIXct(df_merged_m$month)
+
+# Create the numeric variable: an evenly increasing number
+df_merged_m <- df_merged_m %>%
+  arrange(month) %>%  # Ensure data is sorted by month
+  mutate(numeric_month = row_number())  # Assign an increasing number
+
+# Create the seasonal variable: the 12 different months as a factor
+df_merged_m <- df_merged_m %>%
+  mutate(seasonal_month = factor(format(month, "%B"), levels = month.name))  # Month names as ordered factors
+```
+
+Weekly
+
+```{r}
+# Week
+# Ensure the `week` column is in POSIXct format
+df_merged_w$week <- as.POSIXct(df_merged_w$week)
+
+# Create the numeric variable: an evenly increasing number
+df_merged_w <- df_merged_w %>%
+  arrange(week) %>%  # Ensure data is sorted by week
+  mutate(numeric_week = row_number())  # Assign an increasing number
+
+# Create the seasonal variable: the 12 different months as a factor
+df_merged_w <- df_merged_w %>%
+  mutate(seasonal_month = factor(format(week, "%B"), levels = month.name))  # Month names as ordered factors
+```
+
+Daily
+
+```{r}
+# Day
+# Ensure the `day` column is in POSIXct format
+df_merged_d$date <- as.POSIXct(df_merged_d$date)
+
+# Create the numeric variable: an evenly increasing number
+df_merged_d <- df_merged_d %>%
+  arrange(date) %>%  # Ensure data is sorted by day
+  mutate(numeric_day = row_number())  # Assign an increasing number
+```
+
+```{r}
+# Create the seasonal variable: the 12 different months as a factor
+df_merged_d <- df_merged_d %>%
+  mutate(seasonal_month = factor(format(date, "%B"), levels = month.name))  # Month names as ordered factors
+
+# Create a column indicating the day of the week
+df_merged_d <- df_merged_d %>%
+  mutate(day_of_week = factor(weekdays(date), levels = c("Monday", "Tuesday", "Wednesday", 
+                                                         "Thursday", "Friday", "Saturday", "Sunday")))  # Day of the week as ordered factor
+```
+
+### Autocorrelation
+
+```{r}
+## Autocorrelation--------------
+# convert to time series
+sales_d_ts <- ts(df_merged_d$sales_cop)
+sales_w_ts <- ts(df_merged_w$sales_w)
+sales_m_ts <- ts(df_merged_m$sales_m)
+plot(sales_m_ts)
+```
+
+```{r}
+#par(mfrow=c(1,1))
+#tsdisplay(sales_d_ts)
+# is not stationary but has no clear trend
+
+plot(sales_d_ts)
+acf(sales_d_ts)
+pacf(sales_d_ts)
+```
+
+When data are seasonal, the autocorrelation will be larger for the
+seasonal lags (at multiples of the seasonal period) than for other lags.
+
+```{r}
+# Weekly
+
+#tsdisplay(sales_w_ts)
+plot(sales_w_ts)
+acf(sales_w_ts)
+pacf(sales_w_ts)
+
+# not stationary: has trend and seasonality maybe
+```
+
+```{r}
+# Montly
+
+#tsdisplay(sales_m_ts)
+plot(sales_m_ts)
+acf(sales_m_ts)
+pacf(sales_m_ts)
+# has clear trend, no seasonality
+```
+
+```{r}
+#df_merged_m = subset(df_merged_m, select = -c(month) )
+## Log transformation----------
+
+# Monthly
+df_merged_m <- df_merged_m %>%
+  mutate(across(where(is.numeric) & !all_of(c("unemployment", "inflation")), ~ log(. + 1)))
+
+# Weekly
+df_merged_w <- df_merged_w %>%
+  mutate(across(where(is.numeric), ~ log(. + 1)))
+
+# Daily
+df_merged_d <- df_merged_d %>%
+  mutate(across(where(is.numeric), ~ log(. + 1)))
+```
+
+```{r}
+df_merged_m
+```
+
+### Bass Model
+
+```{r}
+# Some simple plots
+plot(sales_m_ts)
+plot(cumsum(sales_m_ts)) #Returns a vector whose elements are the cumulative sums
+```
+
+```{r}
+# Bass model
+bm_monthly_sales <- BM(sales_m_ts)
+summary_bm <- summary(bm_monthly_sales)
+```
+
+```{r}
+summary_bm 
+```
+
+```{r}
+# prediction (out of sample)
+pred_bm_monthly_sales <- predict(bm_monthly_sales, newx=c(1:50))
+pred.inst_m <- make.instantaneous(pred_bm_monthly_sales)
+
+### plot of fitted model 
+plot(sales_m_ts, 
+     type= "b",
+     xlab="Months", 
+     ylab="Monthly Sales",  
+     pch=16, 
+     lty=3, 
+     xaxt="n", 
+     cex=0.6)
+
+axis(1, at=c(1,10,20,30,35), labels=df_merged_m$month[c(1,10,20,30,35)])
+lines(pred.inst_m, lwd=2, col=2)
+```
+
+Estimating the model with 50% of the data
+
+```{r}
+### Estimating the model with 50% of the data
+bm_monthly_sales50 <- BM(sales_m_ts[1:17],display = T)
+summary(bm_monthly_sales50)
+```
+
+```{r}
+pred_bm_monthly_sales50 <- predict(bm_monthly_sales50, newx=c(1:50))
+pred.inst_m50 <- make.instantaneous(pred_bm_monthly_sales25)
+
+plot(sales_m_ts, 
+     type= "b",
+     xlab="Months", 
+     ylab="Monthly Sales",  
+     pch=16, 
+     lty=3, 
+     xaxt="n", 
+     cex=0.6)
+
+axis(1, at=c(1,10,20,30,35), labels=df_merged_m$month[c(1,10,20,30,35)])
+lines(pred.inst_m50, lwd=2, col=2)
+```
+
+Estimating the model with 25% of the data
+
+```{r}
+### Estimating the model with 25% of the data
+bm_monthly_sales25 <- BM(sales_m_ts[1:9],display = T)
+summary(bm_monthly_sales25)
+
+pred_bm_monthly_sales25 <- predict(bm_monthly_sales25, newx=c(1:50))
+pred.inst_m25 <- make.instantaneous(pred_bm_monthly_sales25)
+```
+
+```{r}
+plot(sales_m_ts, 
+     type= "b",
+     xlab="Months", 
+     ylab="Monthly Sales",  
+     pch=16, 
+     lty=3, 
+     xaxt="n", 
+     cex=0.6)
+
+axis(1, at=c(1,10,20,30,35), labels=df_merged_m$month[c(1,10,20,30,35)])
+lines(pred.inst_m25, lwd=2, col=2)
+```
+
+Comparison between models (instantaneous)
+
+```{r}
+###Comparison between models (instantaneous)
+###instantaneous
+plot(sales_m_ts, 
+     type= "b",
+     xlab="Months", 
+     ylab="Monthly Sales",  
+     pch=16, 
+     lty=3, 
+     xaxt="n", 
+     cex=0.6)
+
+axis(1, at=c(1,10,20,30,35), labels=df_merged_m$month[c(1,10,20,30,35)])
+lines(pred.inst_m25, lwd=2, col=2)
+lines(pred.inst_m50, lwd=2, col=3)
+lines(pred.inst_m, lwd=2, col=4)
+```
+
+```{r}
+###Comparison between models (cumulative)
+plot(cumsum(sales_m_ts), 
+     type= "b",
+     xlab="Months", 
+     ylab="Cumulative Sum",  
+     pch=16, 
+     lty=3, 
+     xaxt="n", 
+     cex=0.6)
+
+axis(1, at=c(1,10,20,30,35), labels=df_merged_m$month[c(1,10,20,30,35)])
+
+lines(pred_bm_monthly_sales25, lwd=2, col=2)
+lines(pred_bm_monthly_sales50, lwd=2, col=3)
+lines(pred_bm_monthly_sales, lwd=2, col=4)
+```
+
+```{r}
+#bm_monthly_sales25
+```
+
+#### Limitation of of the Bass Model
+
+-   Bass model assumes that every product succeeds and the sales
+    saturate to the steady state level. However, most new products fail
+    in reality.
+
+-   The market potential *m* is constant along the whole life cycle.
+
+-   Bass model predictions works well only after the scale inflection
+    point. if sales of a category goes up and up like a J-curve, it can
+    over estimate the overall market size.
+
+-   It is a model for products with a limited life cycle: needs a
+    hypothesis.
+
+-   Another drawback of Bass model is that the diffusion pattern in not
+    affected by marketing mix variables like price or advertising.
+
+The generalized Bass model extends the original Bass model allowing the
+roles of marketing mix value.
+
+### Generalized Bass Model
+
+Bass model is used to forecast the adoption of a new product and to
+predict the sales, since it determines the shape of the curve of a model
+that represent the cumulative adoption of a new product. The Generalized
+Bass model extends the original Bass model by incorporating marketing
+mix variables. We can know the effect of pricing, promotions on the new
+product diffusion curve. It is more flexible than the original Bass
+model.
+
+```{r}
+
+m <- 4.451570e+09
+p <- 8.472917e-03
+q <- 9.415625e-02
+
+GBM_monthly_sales <- GBM(
+  sales_m_ts, 
+  shock = 'exp', 
+  nshock = 1,
+  #prelimestimates = c(m,p,q, 12, 0.1, -0.1)
+  prelimestimates = c(m,p,q, 10, 0.1, 2)
+  #prelimestimates = c(m,p,q, 11, 15, -0.1)
+  )
+
+summary(GBM_monthly_sales)
+
+pred_GBM_monthly_sales<- predict(GBM_monthly_sales, newx=c(1:60))
+pred_GBM_monthly_sales.inst<- make.instantaneous(pred_GBM_monthly_sales)
+```
+
+### Guseo-Guidolin Model
+
+```{r}
+GGM_monthly_sales <- GGM(sales_m_ts,  prelimestimates = NULL)
+
+summary(GGM_monthly_sales)
+```
+
+```{r}
+GGM_monthly_sales
+```
+
+K \<- 7.683785e+09
+
+pc \<- 2.698613e-02
+
+qc \<- 2.582412e-01
+
+ps \<- 7.731763e-03
+
+qs \<- 4.508202e-02
+
+```{r}
+pred_GGM_monthly_sales <- predict(GGM_monthly_sales, newx=c(1:60))
+pred.instGGM_monthly_sales <- make.instantaneous(pred_GGM_monthly_sales)
+
+plot(sales_m_ts, 
+     type= "b",
+     xlab="Months", 
+     ylab="Monthly Sales",  
+     pch=16, 
+     lty=3, 
+     xaxt="n", 
+     cex=0.6)
+
+axis(1, at=c(1,10,20,30,35), labels=df_merged_m$month[c(1,10,20,30,35)])
+lines(pred.instGGM_monthly_sales, lwd=2, col=2)
+```
+
+### ARIMA models
+
+ARIMA is a acronym for Auto Regressive Integrated Moving Average, ARIMA
+(p,d,q) where p refers to the AR part, q refers to the MA part and d is
+the degree of first difference involved.
+
+```{r}
+library(fpp2)
+library(forecast) 
+?fpp2
+
+```
+
+#### Daily sales
+
+```{r}
+# ARIMA model
+plot(sales_d_ts)
+
+```
+
+```{r}
+sales_d_ts_diff <- diff(sales_d_ts)
+tsdisplay(sales_d_ts_diff)
+```
+
+The PACF shown in the previous graph is suggesting an AR(5) models
+
+KPSS test
+
+The process of using a sequence of KPSS tests (page 300) to determine
+the appropriate number of first differences is carried out by the
+function ndiffs() .
+
+```{r}
+ndiffs(sales_d_ts)
+```
+
+```{r}
+#nsdiffs(sales_d_ts)
+
+```
+
+```{r}
+auto_arima_d <- auto.arima(sales_d_ts)
+summary(auto_arima_d)
+
+autoplot(forecast(auto_arima_d))
+checkresiduals(auto_arima_d)
+```
+
+#### Weekly sales
+
+```{r}
+plot(sales_w_ts)
+
+```
+
+```{r}
+sales_w_ts_diff <- diff(sales_w_ts)
+plot(sales_w_ts_diff)
+acf(sales_w_ts_diff)
+pacf(sales_w_ts_diff)
+```
+
+```{r}
+ndiffs(sales_w_ts)
+```
+
+```{r}
+auto_arima_w <- auto.arima(sales_w_ts)
+auto_arima_w
+
+autoplot(forecast(auto_arima_w))
+checkresiduals(auto_arima_w)
+```
+
+#### Monthly sales
+
+```{r}
+plot(sales_m_ts)
+```
+
+```{r}
+ndiffs(sales_m_ts)
+
+```
+
+```{r}
+sales_m_ts_diff <- diff(sales_m_ts)
+plot(sales_m_ts_diff)
+acf(sales_m_ts_diff)
+pacf(sales_m_ts_diff)
+```
+
+```{r}
+auto_arima_m <- auto.arima(sales_m_ts)
+auto_arima_m
+
+autoplot(forecast(auto_arima_m))
+checkresiduals(auto_arima_m)
+```
+
+The ARIMA(0,1,0) model can be described simply as a **random walk with
+drift**. Here's what that means:
+
+1.  **AR (AutoRegressive) Part:**
+
+    -   The first number, **0**, indicates the order of the
+        autoregressive part. In this case, it means there are no
+        autoregressive terms (i.e., the model does not use past values
+        of the series to predict future values).
+
+2.  **I (Integrated) Part:**
+
+    -   The second number, **1**, indicates the degree of differencing
+        required to make the time series stationary. Differencing is a
+        technique used to remove trends and seasonality from the series.
+        A value of 1 means the series is differenced once.
+
+3.  **MA (Moving Average) Part:**
+
+    -   The third number, **0**, indicates the order of the moving
+        average part. In this case, it means there are no moving average
+        terms (i.e., the model does not use past forecast errors to
+        predict future values).
+
+An ARIMA(0,1,0) model is suitable when:
+
+-   The time series is non-stationary and becomes stationary after first
+    differencing.
+
+-   There are no significant autocorrelations in the differenced series,
+    indicating that past values do not help in predicting future values
+    beyond the differencing.
+
+-   There are no significant moving average components (i.e., past
+    forecast errors do not help in predicting future values).
+
+#### Seasonality
+
+```{r}
+plot(sales_m_ts)
+```
+
+```{r}
+#nsdiffs(sales_m_ts)
+```
+
+Here we are considering seasonality in the monthly sales time series
+
+The data are clearly non-stationary, with some assumed seasonality, so
+we will first take a seasonal difference.
+
+```{r}
+sales_m_ts %>% diff(lag=12) %>% ggtsdisplay() 
+```
+
+The seasonally differenced data also appear to be non-stationary, so we
+take an additional first difference.
+
+```{r}
+sales_m_ts %>% diff(lag=12) %>% diff() %>% ggtsdisplay() 
+```
+
+Our aim now is to find an appropriate ARIMA model based on the ACF and
+PACF shown in the previous plot.
+
+```{r}
+
+arima_m_season <- Arima(sales_m_ts, order=c(0,1,1), seasonal=c(0,1,1))
+arima_m_season
+checkresiduals(arima_m_season)
+```
+
+All the spikes are within the significant limits, so the residuals
+appear to be white noise.
+
+Forecasting
+
+```{r}
+arima_m_season %>% forecast(h=12) %>% autoplot()
+```
+
+Auto ARIMA
+
+```{r}
+auto_arima_m_season <- auto.arima(sales_m_ts, D=1, seasonal = TRUE)
+auto_arima_m_season
+checkresiduals(auto_arima_m_season)
+```
+
+```{r}
+auto_arima_m_season %>% forecast(h=12) %>% autoplot()
+```
+
+### Exponential Smoothing methods
+
+#### Simple Exponential Smoothing
+
+##### Daily sales
+
+Daily Sales
+
+For daily data, exponential smoothing can be used to forecast short-term
+trends and seasonal patterns. When applying exponential smoothing to
+daily data, you need to consider:
+
+-   **Seasonality**: Daily data often exhibit seasonal patterns, such as
+    weekly cycles (e.g., higher sales on weekends).
+
+-   **Holidays and special events**: These can cause irregular patterns
+    in daily data that may need to be accounted for.
+
+```{r}
+# Simple Exponential Smoothing for daily sales
+
+plot(sales_d_ts)
+```
+
+```{r}
+
+fit_d1 <- ses(sales_d_ts, alpha = 0.2, initial = 'simple', h=5)
+fit_d2 <- ses(sales_d_ts, alpha = 0.6, initial = 'simple', h=5)
+fit_d3 <- ses(sales_d_ts, h=5)
+
+plot(sales_d_ts, ylab='Daily Sales', xlab='Days')
+lines(fitted(fit_d1), col='blue', type='o')
+lines(fitted(fit_d2), col='red', type='o')
+lines(fitted(fit_d3), col='green', type='o')
+```
+
+```{r}
+forecast_d1 <- ses(sales_d_ts, h=5)
+round(accuracy(forecast_d1),2)
+
+summary(forecast_d1)
+
+autoplot(forecast_d1) + autolayer(fitted(forecast_d1),series='Fitted') + ylab("Daily Sales")+xlab("Days")
+```
+
+##### Weekly Sales
+
+Weekly Sales
+
+For weekly data, exponential smoothing can capture longer-term trends
+and seasonal patterns that repeat on a weekly basis. Weekly data can
+also have seasonal components related to months, quarters, or years.
+
+```{r}
+# Simple Exponential Smoothing for weekly sales
+plot(sales_w_ts)
+```
+
+```{r}
+fit_w1 <- ses(sales_w_ts, alpha = 0.2, initial = 'simple', h=5)
+fit_w2 <- ses(sales_w_ts, alpha = 0.6, initial = 'simple', h=5)
+fit_w3 <- ses(sales_w_ts, h=5)
+
+plot(sales_w_ts, ylab='Weekly Sales', xlab='Weeks')
+lines(fitted(fit_w1), col='blue', type='o')
+lines(fitted(fit_w2), col='red', type='o')
+lines(fitted(fit_w3), col='green', type='o')
+```
+
+```{r}
+forecast_w1 <- ses(sales_w_ts, h=5)
+round(accuracy(forecast_w1),2)
+
+summary(forecast_w1)
+
+autoplot(forecast_w1) + autolayer(fitted(forecast_w1),series='Fitted') + ylab("Weekly Sales")+xlab("Weeks")
+```
+
+##### Monthly Sales
+
+Monthly Sales
+
+```{r}
+# Simple Exponential Smoothing for monthly sales
+
+plot(sales_m_ts)
+```
+
+```{r}
+fit_m1 <- ses(sales_m_ts, alpha = 0.2, initial = 'simple', h=5)
+fit_m2 <- ses(sales_m_ts, alpha = 0.6, initial = 'simple', h=5)
+fit_m3 <- ses(sales_m_ts, h=5)
+
+plot(sales_m_ts, ylab='Monthly Sales', xlab='Weeks')
+lines(fitted(fit_m1), col='blue', type='o')
+lines(fitted(fit_m2), col='red', type='o')
+lines(fitted(fit_m3), col='green', type='o')
+```
+
+```{r}
+forecast_m1 <- ses(sales_m_ts, h=5)
+
+# Accuracy of one-step-ahead training errors
+round(accuracy(forecast_m1),2)
+
+summary(forecast_m1)
+
+autoplot(forecast_m1) + autolayer(fitted(forecast_m1),series='Fitted') + ylab("Monthly Sales")+xlab("Months")
+```
+
+#### Trend Method
+
+Holt Method
+
+```{r}
+plot(sales_m_ts)
+```
+
+```{r}
+forecast_holt <- holt(sales_m_ts, h=5)
+forecast2_holt <- holt(sales_m_ts, damped = T, phi = 0.9, h=5)
+
+summary(forecast_holt)
+
+autoplot(sales_m_ts) + 
+  autolayer(forecast_holt, series="Holt's method", PI=F) + 
+  autolayer(forecast2_holt, series="Damped Holt's method", PI=F) +
+  ylab("Monthly Sales")+xlab("Months")
+```
+
+#### Trend and seasonality method
+
+```{r}
+sales_m_ts <- ts(sales_m_ts, frequency = 12)
+forecast_hw <- hw(sales_m_ts, seasonal = 'additive')
+forecast2_hw <- hw(sales_m_ts, seasonal = 'multiplicative')
+
+autoplot(sales_m_ts) +
+  autolayer(forecast_hw, series="Holt-Winters' additive", PI=F) +
+  autolayer(forecast2_hw, series="Holt-Winters' multi", PI=F)
+```
+
+### ARMAX models
+
+#### Rain
+
+```{r}
+df_merged_m
+is.ts(df_merged_m)
+```
+
+```{r}
+ts_merged_m <- ts(df_merged_m)
+is.ts(ts_merged_m)
+```
+
+```{r}
+ts_merged_m[,5]
+```
+
+```{r}
+# Estimate ARMAX model
+armax1_m_rain <- Arima(ts_merged_m[,2], xreg=ts_merged_m[,5], order=c(1,0,1))
+res_armax1_rain <- residuals(armax1_m_rain)
+Acf(res_armax1_rain)
+
+summary(armax1_m_rain)
+plot(ts_merged_m[,2])
+lines(fitted(armax1_m_rain), col=2)
+```
+
+```{r}
+# Estimate ARMAX model
+armax2_m_rain <- Arima(ts_merged_m[,2], xreg=ts_merged_m[,5], order=c(1,0,2))
+res_armax2_rain <- residuals(armax2_m_rain)
+Acf(res_armax2_rain)
+
+summary(armax2_m_rain)
+plot(ts_merged_m[,2])
+lines(fitted(armax2_m_rain), col=2)
+```
+
+```{r}
+# Estimate ARMAX model
+armax3_m_rain <- Arima(ts_merged_m[,2], xreg=ts_merged_m[,5], order=c(1,1,2))
+res_armax3_rain <- residuals(armax3_m_rain)
+Acf(res_armax3_rain)
+
+summary(armax3_m_rain)
+plot(ts_merged_m[,2])
+lines(fitted(armax3_m_rain), col=2)
+```
+
+```{r}
+########procedure also available with auto.arima
+auto.arima_rain <- auto.arima(ts_merged_m[,2], xreg=ts_merged_m[,5]) 
+res_auto.arima_rain <- residuals(auto.arima_rain)
+Acf(res_auto.arima_rain)
+
+summary(auto.arima_rain)
+plot(ts_merged_m[,2])
+lines(fitted(auto.arima_rain), col=2)
+```
+
+#### Temperature
+
+```{r}
+# Estimate ARMAX model
+armax1_m_temp <- Arima(ts_merged_m[,2], xreg=ts_merged_m[,11], order=c(1,0,1))
+res_armax1_temp <- residuals(armax1_m_temp)
+Acf(res_armax1_temp)
+
+summary(armax1_m_temp)
+plot(ts_merged_m[,2])
+lines(fitted(armax1_m_temp), col=2)
+```
+
+```{r}
+auto.arima_temp <- auto.arima(ts_merged_m[,2], xreg=ts_merged_m[,11]) 
+res_auto.arima_temp <- residuals(auto.arima_temp)
+Acf(res_auto.arima_temp)
+
+summary(auto.arima_temp)
+plot(ts_merged_m[,2])
+lines(fitted(auto.arima_temp), col=2)
+```
+
+#### Inflation
+
+```{r}
+auto.arima_infl <- auto.arima(ts_merged_m[,2], xreg=ts_merged_m[,9]) 
+res_auto.arima_infl <- residuals(auto.arima_infl)
+Acf(res_auto.arima_infl)
+
+summary(auto.arima_infl)
+plot(ts_merged_m[,2])
+lines(fitted(auto.arima_infl), col=2)
+```
+
+#### Unemployment
+
+```{r}
+auto.arima_unemp <- auto.arima(ts_merged_m[,2], xreg=ts_merged_m[,10]) 
+res_auto.arima_unemp <- residuals(auto.arima_unemp)
+Acf(res_auto.arima_unemp)
+
+summary(auto.arima_unemp)
+plot(ts_merged_m[,2])
+lines(fitted(auto.arima_unemp), col=2)
+```
+
+### SARMAX
+
+Function Arima() of the forecast library works to implement the SARMAX
+refinement.
+
+Page 66, professor's book:
+
+The practical application of the ARMAX (or SARMAX) procedure may be
+summarized in the following steps:
+
+1.  Select a nonlinear model f(beta, t) for y(t), e.g. Bass model,
+    Generalized Bass model, and GGM.
+2.  Perform an analysis of residuals: graphical inspection of residuals,
+    analysis of ACF. If needed, perform some tests, e.g. Durbin-Watson.
+3.  If there is autocorrelation in the residuals, apply an ARMAX or
+    SARMAX model directly to y(t), by including f(beta_hat, t) as a
+    plug-in covariate.
+4.  Check the estimation results, by paying special attention to the
+    estimation of parameter lambda.
+5.  Make a selection of the model based on the AIC.
+6.  Update the predictions after the refinement.
+
+### Generalized Additive Models
+
+```{r}
+#??????
+```
+
+### Prophet
+
+This model was introduced by Facebook ([S. J. Taylor & Letham,
+2018](https://otexts.com/fpp3/prophet.html#ref-prophet)), originally for
+forecasting daily data with weekly and yearly seasonality, plus holiday
+effects. It was later extended to cover more types of seasonal data. It
+works best with time series that have strong seasonality and several
+seasons of historical data.
+
+Prophet can be considered a nonlinear regression model (Chapter
+[7](https://otexts.com/fpp3/regression.html#regression)), of the form
+yt=g(t)+s(t)+h(t)+εt, where g(t) describes a piecewise-linear trend (or
+"growth term"), s(t) describes the various seasonal patterns, h(t)
+captures the holiday effects, and εt is a white noise error term.
+
+-   The knots (or changepoints) for the piecewise-linear trend are
+    automatically selected if not explicitly specified. Optionally, a
+    logistic function can be used to set an upper bound on the trend.
+
+-   The seasonal component consists of Fourier terms of the relevant
+    periods. By default, order 10 is used for annual seasonality and
+    order 3 is used for weekly seasonality.
+
+-   Holiday effects are added as simple dummy variables.
+
+-   The model is estimated using a Bayesian approach to allow for
+    automatic selection of the changepoints and other model
+    characteristics.
+
+```{r}
+library(prophet)
+```
+
+The input to Prophet is [always]{.underline} a dataframe with two
+columns: ds and y . **The ds (datestamp) column should be of a format,
+ideally YYYY-MM-DD for a date or YYYY-MM-DD HH:MM:SS for a timestamp**.
+The y column [must]{.underline} be numeric, and represents the
+measurement we wish to forecast.
+
+#### Monthly sales
+
+```{r}
+# sales montly
+ggplot(df_sales_m, aes(x=month, y=sales_m)) +
+  geom_line() + ggtitle("Monthly Sales of Restaurant")
+
+head(df_sales_m)
+```
+
+```{r}
+#Prophet model
+# model with no seasonality
+df_prophet_m <- df_sales_m[1:2]
+colnames(df_prophet_m) = c("ds", "y")
+df_prophet_m
+
+prophet_sales_m <- prophet(df_prophet_m)
+```
+
+```{r}
+future_sales_m <- make_future_dataframe(prophet_sales_m, 
+                                        periods = 4,
+                                        freq = 'month',
+                                        include_history = T
+                                        )
+tail(future_sales_m)
+```
+
+```{r}
+forecast_sales_m <- predict(prophet_sales_m, future_sales_m)
+tail(forecast[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
+
+plot(prophet_sales_m, forecast_sales_m)
+```
+
+```{r}
+prophet_plot_components(prophet_sales_m, forecast_sales_m)
+```
+
+```{r}
+dyplot.prophet(prophet_sales_m, forecast_sales_m)
+```
+
+#### Weekly sales
+
+```{r}
+ggplot(df_sales_w, aes(x=week, y=sales_w)) +
+  geom_line() + ggtitle("Weekly Sales of Restaurant")
+```
+
+```{r}
+head(df_sales_w)
+```
+
+```{r}
+#Prophet model
+# model with no seasonality
+df_prophet_w <- df_sales_w[1:2]
+colnames(df_prophet_w) = c("ds", "y")
+df_prophet
+
+#prophet_sales_w <- prophet(df_prophet, daily.seasonality = TRUE)
+prophet_sales_w <- prophet(df_prophet_w)
+```
+
+Predictions are made on a dataframe with a column `ds` containing the
+dates for which predictions are to be made. The `make_future_dataframe`
+function takes the model object and a number of periods to forecast and
+produces a suitable dataframe. By default it will also include the
+historical dates so we can evaluate in-sample fit.
+
+```{r}
+future_sales_w <- make_future_dataframe(prophet_sales_w, 
+                                        periods = 12,
+                                        freq = 'week',
+                                        include_history = T)
+tail(future_sales_w)
+```
+
+As with most modeling procedures in R, we use the generic `predict`
+function to get our forecast. The `forecast` object is a dataframe with
+a column `yhat` containing the forecast. It has additional columns for
+uncertainty intervals and seasonal components.
+
+```{r}
+# R
+forecast_sales_w <- predict(prophet_sales_w, future_sales_w)
+tail(forecast[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
+```
+
+```{r}
+plot(prophet_sales_w, forecast_sales_w)
+```
+
+You can use the `prophet_plot_components` function to see the forecast
+broken down into trend, weekly seasonality, and yearly seasonality.
+
+```{r}
+prophet_plot_components(prophet_sales_w, forecast_sales_w)
+```
+
+```{r}
+dyplot.prophet(prophet_sales_w, forecast_sales_w)
+```
+
+#### Daily Sales
+
+```{r}
+head(sales)
+
+ggplot(
+  sales, 
+  aes(x=date, y=sales_cop)
+  ) + geom_line() + ggtitle("Daily Sales of Restaurant")
+```
+
+```{r}
+#Prophet model
+# model with no seasonality
+df_prophet <- sales[1:2]
+colnames(df_prophet) = c("ds", "y")
+df_prophet
+
+#prophet_sales_d <- prophet(df_prophet, weekly.seasonality = TRUE)
+prophet_sales_d <- prophet(df_prophet)
+```
+
+```{r}
+future_sales_d <- make_future_dataframe(prophet_sales_d,
+                                        periods = 100,
+                                        freq = 'day',
+                                        include_history = T)
+tail(future_sales_w)
+```
+
+```{r}
+forecast_sales_d <- predict(prophet_sales_d, future_sales_d)
+tail(forecast[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
+```
+
+```{r}
+plot(prophet_sales_d, forecast_sales_d)
+```
+
+```{r}
+prophet_plot_components(prophet_sales_d, forecast_sales_d)
+```
+
+```{r}
+dyplot.prophet(prophet_sales_d, forecast_sales_d)
+```
+
+### Gradient Boosting
+
+```{r}
+library(gbm)
+```
+
+```{r}
+?gbm
+```
