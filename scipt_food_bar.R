@@ -1477,17 +1477,156 @@ Box.test(res_GGM_f_d, lag = 10, type = "Ljung-Box") # h0 res indep
 # p-val < alpha =>  reject h0, so residuals are NOT indep
 
 
-## 6.1.3 Holt-Winters---------------------
+## 6.1.4 GGM BAR-------------
+# Runs on DIMORA
+# documentation: https://cran.rstudio.com/web/packages/DIMORA/DIMORA.pdf
+# bass model preliminary m, p, q for algorithm
+
+# mt argument is the determination of market potential
+### Monthly----------------------------------
+ggm1_bar_m <- GGM(bar_m_ts, mt = 'base', display = T)
+ggm2_bar_m <- GGM(bar_m_ts, mt = function(x) pchisq(x, 10), display = T)
+summary(ggm1_bar_m)
+summary(ggm2_bar_m)
+# Try different functions for market potential
+
+ggm3_bar_m <- GGM(bar_m_ts, mt = function(x) log(x), display = T)
+ggm4_bar_m <- GGM(bar_m_ts, mt = function(x) (x)^(1 / 1.05), display = T)
+summary(ggm3_bar_m)
+summary(ggm4_bar_m)
+
+# Predictions
+pred_GGM_bar_m <- predict(ggm1_bar_m, newx = c(1:length(bar_m_ts)))
+pred_GGM_bar_m <- ts(pred_GGM_bar_m, start = start(bar_m_ts), frequency = frequency(bar_m_ts))
+pred_GGM_bar_m.inst <- make.instantaneous(pred_GGM_bar_m)
+pred_GGM_bar_m.inst <- ts(pred_GGM_bar_m.inst, start = start(bar_m_ts), frequency = frequency(bar_m_ts))
+
+# Plot
+plot(bar_m_ts, type = "p", col = "black", pch = 16, cex = 0.7,
+     xlab = "Month", ylab = "Monthly Sales", main = "Actual vs Fitted Sales (Bar)")
+
+# Add the fitted values as a line
+lines(pred_GGM_bar_m.inst, col = "red", lwd = 2)
+
+# Add a legend
+legend("topleft", legend = c("Actual Values", "Fitted Values"),
+       col = c("black", "red"), pch = c(16, NA), lty = c(NA, 1), lwd = c(NA, 2))
+
+# Analysis of residuals
+res_GGM_bar_m <- bar_m_ts - pred_GGM_bar_m.inst
+tsdisplay(res_GGM_bar_m)
+
+# Check for stationarity of residuals
+adf_test_bar_m <- adf.test(res_GGM_bar_m)
+print(adf_test_bar_m) # If p-val < alpha, series stationary
+
+# Check for autocorrelation in residuals
+Box.test(res_GGM_bar_m, lag = 10, type = "Ljung-Box") # h0 res indep
+
+
+### Weekly----------------------------------
+ggm1_bar_w <- GGM(bar_w_ts, mt = 'base', display = T)
+ggm2_bar_w <- GGM(bar_w_ts, mt = function(x) pchisq(x, 25), display = T)
+summary(ggm1_bar_w) # This one is better
+summary(ggm2_bar_w)
+# Try different functions for market potential
+
+ggm3_bar_w <- GGM(bar_w_ts, mt = function(x) log(x), display = T)
+ggm4_bar_w <- GGM(bar_w_ts, mt = function(x) (x)^(1 / 1.05), display = T)
+
+summary(ggm3_bar_w)
+summary(ggm4_bar_w) # Better shaped but less significant
+
+# Predictions
+pred_GGM_bar_w <- predict(ggm4_bar_w, newx = c(1:length(bar_w_ts)))
+pred_GGM_bar_w <- ts(pred_GGM_bar_w, start = start(bar_w_ts), frequency = frequency(bar_w_ts))
+pred_GGM_bar_w.inst <- make.instantaneous(pred_GGM_bar_w)
+pred_GGM_bar_w.inst <- ts(pred_GGM_bar_w.inst, start = start(bar_w_ts), frequency = frequency(bar_w_ts))
+
+# Plot
+plot(bar_w_ts, type = "p", col = "black", pch = 16, cex = 0.7,
+     xlab = "Month", ylab = "Weekly Sales", main = "Actual vs Fitted Sales (Bar)")
+
+# Add the fitted values as a line
+lines(pred_GGM_bar_w.inst, col = "red", lwd = 2)
+
+# Add a legend
+legend("topleft", legend = c("Actual Values", "Fitted Values"),
+       col = c("black", "red"), pch = c(16, NA), lty = c(NA, 1), lwd = c(NA, 2))
+
+# Analysis of residuals
+res_GGM_bar_w <- bar_w_ts - pred_GGM_bar_w.inst
+tsdisplay(res_GGM_bar_w)
+# autocorrelation present
+
+# Check for stationarity of residuals
+adf_test_bar_w <- adf.test(res_GGM_bar_w)
+print(adf_test_bar_w)
+# not stationary, pval > alpha
+
+# Check for autocorrelation in residuals
+Box.test(res_GGM_bar_w, lag = 10, type = "Ljung-Box") # h0 res indep
+# autocorrelation because pval < alpha (h0 no autocorrel, reject h0)
+
+### Daily----------------------------------
+ggm1_bar_d <- GGM(bar_d_ts, mt = 'base', display = T)
+ggm2_bar_d <- GGM(bar_d_ts, mt = function(x) pchisq(x, 10), display = T)
+summary(ggm1_bar_d) # This one is better looking / pc, qc non significant
+summary(ggm2_bar_d)
+# Try different functions for market potential
+
+ggm3_bar_d <- GGM(bar_d_ts, mt = function(x) log(x), display = T)
+ggm4_bar_d <- GGM(bar_d_ts, mt = function(x) (x)^(1 / 1.05), display = T)
+
+summary(ggm3_bar_d)
+summary(ggm1_bar_d)
+summary(ggm4_bar_d)
+# best model is the base one
+
+# Predictions
+pred_GGM_bar_d <- predict(ggm1_bar_d, newx = c(1:length(bar_d_ts)))
+pred_GGM_bar_d <- ts(pred_GGM_bar_d, start = start(bar_d_ts), frequency = frequency(bar_d_ts))
+pred_GGM_bar_d.inst <- make.instantaneous(pred_GGM_bar_d)
+pred_GGM_bar_d.inst <- ts(pred_GGM_bar_d.inst, start = start(bar_d_ts), frequency = frequency(bar_d_ts))
+
+# Plot
+plot(bar_d_ts, type = "p", col = "black", pch = 16, cex = 0.7,
+     xlab = "Month", ylab = "Daily Sales", main = "Actual vs Fitted Sales (Bar)")
+
+# Add the fitted values as a line
+lines(pred_GGM_bar_d.inst, col = "red", lwd = 2)
+
+# Add a legend
+legend("topleft", legend = c("Actual Values", "Fitted Values"),
+       col = c("black", "red"), pch = c(16, NA), lty = c(NA, 1), lwd = c(NA, 2))
+
+# Analysis of residuals
+res_GGM_bar_d <- bar_d_ts - pred_GGM_bar_d.inst
+tsdisplay(res_GGM_bar_d)
+# serial autocorrel
+
+# Check for stationarity of residuals
+adf_test_bar_d <- adf.test(res_GGM_bar_d)
+print(adf_test_bar_d)
+# reject non stationarity: is stationary
+
+# Check for autocorrelation in residuals
+Box.test(res_GGM_bar_d, lag = 10, type = "Ljung-Box") # h0 res indep
+# reject indep, there is correl
+
+
+## 6.1.5 Holt-Winters FOOD---------------------
 library(forecast)
 # We try this model because fits trend and seasonality in a smooth way
 #### Monthly------------------------------
-autoplot(sales_m_ts)
+autoplot(food_m_ts)
+time(food_m_ts)
 
 # adjust timeseries:
-sales_m_ts <- ts(sales_m_ts, frequency=12, start=c(2021, 11))
+food_m_ts <- ts(food_m_ts, frequency=12, start=c(2021, 11))
 
-hw1_m<- hw(sales_m_ts, seasonal="additive")
-hw2_m<- hw(sales_m_ts, seasonal="multiplicative")
+hw1_m<- hw(food_m_ts, seasonal="additive")
+hw2_m<- hw(food_m_ts, seasonal="multiplicative")
 
 # prediction
 fitted_hw1 <- hw1_m$fitted
@@ -1497,8 +1636,8 @@ fitted_hw2 <- hw2_m$fitted
 
 # Create a data frame for ggplot
 plot_data <- data.frame(
-  Time = time(sales_m_ts),
-  Actual = as.numeric(sales_m_ts),
+  Time = time(food_m_ts),
+  Actual = as.numeric(food_m_ts),
   Fitted_Additive = as.numeric(hw1_m$fitted),
   Fitted_Multiplicative = as.numeric(hw2_m$fitted)
 )
@@ -1567,7 +1706,7 @@ forecast_hw2 <- forecast(hw2_m, h=12)
 
 # Forecast plot
 # Plot the time series with both forecasts
-autoplot(sales_m_ts) +
+autoplot(food_m_ts) +
   autolayer(forecast_hw1$mean, series="Additive Holt-Winters Forecast", PI=F) +
   autolayer(forecast_hw2$mean, series="Multiplicative Holt-Winters Forecast", PI=F) +
   ggtitle("Sales Forecast with Holt-Winters Models") +
@@ -1581,39 +1720,111 @@ autoplot(sales_m_ts) +
   theme(legend.position = "top", legend.title = element_blank())
 
 # autoplot
-autoplot(sales_m_ts)+
+autoplot(food_m_ts)+
   autolayer(hw2_m, series="Holt-Winters' method", PI=F)
 
+## 6.1.6 Holt-Winters BAR---------------------
 
-#### Weekly------------------------------
-tsdisplay(sales_m_ts)
-autoplot(sales_w_ts)
-head(df_merged_w)
-head(sales_w_ts)
-# adjust timeseries:
-sales_w_ts <- ts(sales_w_ts, frequency=52, start=c(2021, 10,31))
+#### Monthly------------------------------
+autoplot(bar_m_ts)
+time(bar_m_ts)
 
-# experiment to evaluate max frequency of holt winters method in R
-# Find the grouping factor for 24 periods in a year (every 2.1667 weeks per period)
-weeks_per_period <- 52 / 24
-group <- floor((seq_along(sales_w_ts) - 1) / weeks_per_period)
+# Adjust timeseries:
+bar_m_ts <- ts(bar_m_ts, frequency = 12, start = c(2021, 11))
 
-# Aggregate by summing (or averaging)
-sales_bimonthly <- tapply(sales_w_ts, group, sum)
+# Fit Holt-Winters models for bar data
+hw1_b_m <- hw(bar_m_ts, seasonal = "additive")
+hw2_b_m <- hw(bar_m_ts, seasonal = "multiplicative")
 
-# Create a new time series with frequency 24
-sales_bimonthly_ts <- ts(sales_bimonthly, frequency=24, start=c(2021, 10))
+# Predictions
+fitted_hw1_b_m <- hw1_b_m$fitted
+fitted_hw2_b_m <- hw2_b_m$fitted
 
-autoplot(sales_w_ts)
-autoplot(sales_bimonthly_ts)
+# Plot
 
-#hw1_w<- hw(sales_bw_ts, seasonal="additive") # does not work
-#hw2_w<- hw(sales_w_ts, seasonal="multiplicative")
-hw2_w<- hw(sales_bimonthly_ts, seasonal="multiplicative") # Works
-# Since we are particularly interested in weekly ts, 
-# we dont continue with HW
-autoplot(sales_bimonthly_ts)+
-  autolayer(hw2_w, series="Holt-Winters' method", PI=F)
+# Create a data frame for ggplot
+plot_data_b <- data.frame(
+  Time = time(bar_m_ts),
+  Actual = as.numeric(bar_m_ts),
+  Fitted_Additive = as.numeric(hw1_b_m$fitted),
+  Fitted_Multiplicative = as.numeric(hw2_b_m$fitted)
+)
+
+# Melt data for easier ggplot usage
+plot_data_b_melted <- melt(plot_data_b, id.vars = "Time", 
+                           variable.name = "Series", 
+                           value.name = "Value")
+
+# Plot using ggplot2
+ggplot(plot_data_b_melted, aes(x = Time, y = Value, color = Series)) +
+  geom_point(data = subset(plot_data_b_melted, Series == "Actual"), size = 2) + # Actual values as dots
+  geom_line(data = subset(plot_data_b_melted, Series != "Actual"), size = 1) +  # Fitted values as lines
+  labs(
+    title = "Actual vs Fitted Values (Bar)",
+    x = "Time",
+    y = "Value",
+    color = "Series"
+  ) +
+  scale_color_manual(
+    values = c("Actual" = "black", "Fitted_Additive" = "blue", "Fitted_Multiplicative" = "red"),
+    labels = c("Actual", "Fitted (Additive)", "Fitted (Multiplicative)")
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    legend.title = element_text(face = "bold")
+  )
+
+# Residuals
+residuals_hw1_b_m <- residuals(hw1_b_m)  
+residuals_hw2_b_m <- residuals(hw2_b_m)  
+tsdisplay(residuals_hw1_b_m, main = "Residuals: Additive Holt-Winters (Bar)")
+tsdisplay(residuals_hw2_b_m, main = "Residuals: Multiplicative Holt-Winters (Bar)")
+
+# Stationarity and Correlation
+# Check for stationarity of residuals
+# Additive
+adf_test_hw1_b_m <- adf.test(residuals_hw1_b_m) # H0: series is non-stationary
+print(adf_test_hw1_b_m) # If p-val < alpha, series is stationary
+
+# Multiplicative
+adf_test_hw2_b_m <- adf.test(residuals_hw2_b_m) # H0: series is non-stationary
+print(adf_test_hw2_b_m) # If p-val < alpha, series is stationary
+
+# Check for autocorrelation in residuals
+# Additive
+Box.test(residuals_hw1_b_m, lag = 10, type = "Ljung-Box") # H0: residuals are independent
+# Multiplicative
+Box.test(residuals_hw2_b_m, lag = 10, type = "Ljung-Box") # H0: residuals are independent
+
+# Multiplicative model seems to follow the data better, 
+# and residuals are slightly better
+
+# Forecast
+# Save the forecast of the two models
+forecast_hw1_b_m <- forecast(hw1_b_m, h = 12)
+forecast_hw2_b_m <- forecast(hw2_b_m, h = 12)
+
+# Forecast plot
+# Plot the time series with both forecasts
+autoplot(bar_m_ts) +
+  autolayer(forecast_hw1_b_m$mean, series = "Additive Holt-Winters Forecast (Bar)", PI = F) +
+  autolayer(forecast_hw2_b_m$mean, series = "Multiplicative Holt-Winters Forecast (Bar)", PI = F) +
+  ggtitle("Sales Forecast with Holt-Winters Models (Bar)") +
+  xlab("Time") +
+  ylab("Sales") +
+  scale_color_manual(
+    values = c("Additive Holt-Winters Forecast (Bar)" = "blue",
+               "Multiplicative Holt-Winters Forecast (Bar)" = "red")
+  ) +
+  theme_minimal() +
+  theme(legend.position = "top", legend.title = element_blank())
+
+# Autoplot
+autoplot(bar_m_ts) +
+  autolayer(hw2_b_m, series = "Holt-Winters' Method (Multiplicative, Bar)", PI = F)
+
+
 
 # 7. ARIMA Models----------------------------
 ## 7.1 Standard ARIMA---------------------------------
