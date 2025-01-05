@@ -1827,23 +1827,23 @@ autoplot(bar_m_ts) +
 
 
 # 7. ARIMA Models----------------------------
-## 7.1 Standard ARIMA---------------------------------
+## 7.1 Standard ARIMA FOOD---------------------------------
 ## Montly------------------
-
-plot(sales_m_ts)
+library(forecast)
+plot(food_m_ts)
 # see if series is stationary
-adf.test(sales_m_ts) #H0, series is non-stationary
+adf.test(food_m_ts) #H0, series is non-stationary
 # p-val > 0.05 => dont reject, non stationary: series is not stationary
-adf.test(diff(sales_m_ts)) #H0, series is non-stationary
+adf.test(diff(food_m_ts)) #H0, series is non-stationary
 
 # see the acf and pacf
-tsdisplay(diff(sales_m_ts))
+tsdisplay(diff(food_m_ts)) 
 # PACF suggest AR-1 ?
 # ACF suggests MA-1 ?
 
 ### Manual ARIMA------------
 # ARIMA(p,d,q) = (1,1,0)
-arima1_m<- Arima(sales_m_ts, order=c(1,1,0))
+arima1_m<- Arima(food_m_ts, order=c(1,1,0))
 summary(arima1_m)
 
 # study residual to see if is a good model
