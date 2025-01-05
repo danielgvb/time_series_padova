@@ -1063,6 +1063,7 @@ bar_m_ts <- fill_ones(bar_m_ts)
 plot(food_d_ts, main = "Food Daily TS (Adjusted)")
 plot(food_w_ts, main = "Food Weekly TS (Adjusted)")
 plot(food_m_ts, main = "Food Monthly TS (Adjusted)")
+
 plot(bar_d_ts, main = "Bar Daily TS (Adjusted)")
 plot(bar_w_ts, main = "Bar Weekly TS (Adjusted)")
 plot(bar_m_ts, main = "Bar Monthly TS (Adjusted)")
@@ -1070,7 +1071,7 @@ plot(bar_m_ts, main = "Bar Monthly TS (Adjusted)")
 
 
 ## 6.1 Difussion Models----------------
-## 6.1.1 BASS Model Food--------------
+## 6.1.1 BASS Model FOOD--------------
 ### Monthly---------
 # simple Bass model
 bm_f_m<-BM(food_m_ts,display = T) # show graphical view of results / display = True
@@ -1096,6 +1097,7 @@ bm_f_m$coefficients['m'] - sum(food_m_ts)
 # Prediction
 pred_bm_f_m<- predict(bm_f_m, newx=c(1:length(food_m_ts)))
 pred_bm_f_m <- ts(pred_bm_f_m, start = start(food_m_ts), frequency = frequency(food_m_ts))
+pred.inst_bm_f_m <- make.instantaneous(pred_bm_f_m)
 pred.inst_bm_f_m <- ts(pred.inst_bm_f_m, start = start(food_m_ts), frequency = frequency(food_m_ts))
 
 # plot
@@ -1117,7 +1119,7 @@ tsdisplay(res_bm_f_m)
 
 ### Weekly------------------------------------------------
 
-bm_f_w<-BM(food_w_ts,display = T) # show graphical view of results / display = True
+bm_f_w <- BM(food_w_ts,display = T) # show graphical view of results / display = True
 summary(bm_f_w)
 bm_f_w$coefficients['m'] - sum(food_w_ts)
 # results are similar in terms of m, p and w are in other scale 
@@ -1131,8 +1133,7 @@ plot(food_w_ts)
 # Prediction
 pred_bm_f_w<- predict(bm_f_w, newx=c(1:length(food_w_ts)))
 pred_bm_f_w <- ts(pred_bm_f_w, start = start(food_w_ts), frequency = frequency(food_w_ts))
-pred.inst_bm_f_w <- ts(pred.inst_bm_f_w, start = start(food_w_ts), frequency = frequency(food_w_ts))
-# Ensure the predictions are aligned with the time series
+pred.inst_bm_f_w <- make.instantaneous(pred_bm_f_w)
 pred.inst_bm_f_w <- ts(pred.inst_bm_f_w, start = start(food_w_ts), frequency = frequency(food_w_ts))
 
 
@@ -1161,7 +1162,7 @@ tsdisplay(res_bm_f_w)
 ### Daily--------------
 
 # first entries of food are 0 so we drop them and start from 1st december 2021
-bm_f_d<-BM(food_d_ts,display = T) # show graphical view of results / display = True
+bm_f_d <- BM(food_d_ts, display = TRUE) # show graphical view of results / display = True
 summary(bm_f_d)
 bm_f_d$coefficients['m'] - sum(food_d_ts)
 
@@ -1172,139 +1173,307 @@ bm_f_w$coefficients['p'] / bm_f_d$coefficients['p'] # they are approx 7 times
 # which makes sense
 
 # Prediction
+# Generate cumulative predictions
+pred_bm_f_d <- predict(bm_f_d, newx = c(1:length(food_d_ts)))
 pred_bm_f_d <- ts(pred_bm_f_d, start = start(food_d_ts), frequency = frequency(food_d_ts))
-pred.inst_bm_f_d <- ts(pred.inst_bm_f_d, start = start(food_d_ts), frequency = frequency(food_d_ts))
-pred.inst_bm_f_d <- ts(pred.inst_bm_f_d, start = start(food_d_ts), frequency = frequency(food_d_ts))
 
+# Calculate instantaneous predictions
+pred.inst_bm_f_d <- make.instantaneous(pred_bm_f_d)
+pred.inst_bm_f_d <- ts(pred.inst_bm_f_d, start = start(food_d_ts), frequency = frequency(food_d_ts))
 
 # Plot of fitted model 
-plot(sales_d_ts, type= "b",xlab="month", ylab="Daily sales",  pch=16, lty=3, xaxt="n", cex=0.6)
-lines(pred.inst_bm_d, lwd=2, col=2)
+# Plot actual vs fitted sales for daily data
+plot(food_d_ts, type = "p", col = "black", pch = 16, cex = 0.7,
+     xlab = "Day", ylab = "Daily Sales", main = "Actual vs Fitted Daily Sales")
+
+# Add fitted instantaneous sales
+lines(pred.inst_bm_f_d, col = "red", lwd = 2)
+
+# Add a legend
+legend("topleft", legend = c("Actual Values", "Fitted Values"),
+       col = c("black", "red"), pch = c(16, NA), lty = c(NA, 1), lwd = c(NA, 2))
+
+
+
 
 # check residuals
-res_bm_d <- sales_d_ts - pred.inst_bm_d
-tsdisplay(res_bm_d)
-
+res_bm_f_d <- food_d_ts - pred.inst_bm_f_d
+tsdisplay(res_bm_f_d)
+# residuals are not well behaved, seem not stationary and correlated
 
 # overall the bass model fits a bell, if we are doing a generalized version
 # lets try one that lets us define a more versatile curve
 
-## 6.1.2 GGM-------------
+## 6.1.2 BASS Model BAR-----------------------------
+### Monthly---------
+# Simple Bass model for bar sales
+bm_b_m <- BM(bar_m_ts, display = TRUE) # Show graphical view of results
+
+summary(bm_b_m)
+
+bm_b_m$coefficients['m'] - sum(bar_m_ts)
+# According to this, there are only 237.148.750 COP left to sell, this is less than a year / seems wrong
+
+# Prediction
+pred_bm_b_m <- predict(bm_b_m, newx = c(1:length(bar_m_ts)))
+pred_bm_b_m <- ts(pred_bm_b_m, start = start(bar_m_ts), frequency = frequency(bar_m_ts))
+pred.inst_bm_b_m <- make.instantaneous(pred_bm_b_m)
+pred.inst_bm_b_m <- ts(pred.inst_bm_b_m, start = start(bar_m_ts), frequency = frequency(bar_m_ts))
+
+# Plot
+plot(bar_m_ts, type = "p", col = "black", pch = 16, cex = 0.7,
+     xlab = "Month", ylab = "Monthly Sales", main = "Actual vs Fitted Sales (Bar)")
+
+# Add the fitted values as a line
+lines(pred.inst_bm_b_m, col = "red", lwd = 2)
+
+# Add a legend
+legend("topleft", legend = c("Actual Values", "Fitted Values"),
+       col = c("black", "red"), pch = c(16, NA), lty = c(NA, 1), lwd = c(NA, 2))
+
+# Check residuals
+res_bm_b_m <- bar_m_ts - pred.inst_bm_b_m
+tsdisplay(res_bm_b_m)
+# Residuals have some structure and 1 lag has correlation
+
+### Weekly------------------------------------------------
+
+bm_b_w <- BM(bar_w_ts, display = TRUE) # Show graphical view of results
+summary(bm_b_w)
+bm_b_w$coefficients['m'] - sum(bar_w_ts)
+# Results are similar in terms of m, p and q are on another scale 
+# because they are in a different time stamp
+bm_b_m$coefficients['q'] / bm_b_w$coefficients['q'] # They are approx 4 times
+bm_b_m$coefficients['p'] / bm_b_w$coefficients['p'] # They are approx 4 times
+# Which makes sense
+
+
+# Prediction
+pred_bm_b_w <- predict(bm_b_w, newx = c(1:length(bar_w_ts)))
+pred_bm_b_w <- ts(pred_bm_b_w, start = start(bar_w_ts), frequency = frequency(bar_w_ts))
+pred.inst_bm_b_w <- make.instantaneous(pred_bm_b_w)
+pred.inst_bm_b_w <- ts(pred.inst_bm_b_w, start = start(bar_w_ts), frequency = frequency(bar_w_ts))
+
+# Plot
+plot(bar_w_ts, type = "p", col = "black", pch = 16, cex = 0.7,
+     xlab = "Week", ylab = "Weekly Sales", main = "Actual vs Fitted Sales (Bar)")
+
+# Add the fitted values as a line
+lines(pred.inst_bm_b_w, col = "red", lwd = 2)
+
+# Add a legend
+legend("topleft", legend = c("Actual Values", "Fitted Values"),
+       col = c("black", "red"), pch = c(16, NA), lty = c(NA, 1), lwd = c(NA, 2))
+
+# Check residuals
+res_bm_b_w <- bar_w_ts - pred.inst_bm_b_w
+tsdisplay(res_bm_b_w)
+
+# Clear trend and structure in the residuals
+
+### Daily--------------
+
+bm_b_d <- BM(bar_d_ts,method ='nls',
+             oos=round(length(bar_d_ts)*0.5), , display = TRUE) # Show graphical view of results
+summary(bm_b_d)
+
+
+# after serveral iterations, this model does not fit properly, and should not
+# we will continue with GGM
+
+bm_b_d$coefficients['m'] - sum(bar_d_ts)
+
+# Results are similar in terms of m, p and q are on another scale 
+# because they are in a different time stamp
+bm_b_w$coefficients['q'] / bm_b_d$coefficients['q'] # They are approx 7 times
+bm_b_w$coefficients['p'] / bm_b_d$coefficients['p'] # They are approx 7 times
+# Which makes sense
+
+# Prediction
+pred_bm_b_d <- predict(bm_b_d, newx = c(1:length(bar_d_ts)))
+pred_bm_b_d <- ts(pred_bm_b_d, start = start(bar_d_ts), frequency = frequency(bar_d_ts))
+
+# Calculate instantaneous predictions
+pred.inst_bm_b_d <- make.instantaneous(pred_bm_b_d)
+pred.inst_bm_b_d <- ts(pred.inst_bm_b_d, start = start(bar_d_ts), frequency = frequency(bar_d_ts))
+
+# Plot
+plot(bar_d_ts, type = "p", col = "black", pch = 16, cex = 0.7,
+     xlab = "Day", ylab = "Daily Sales", main = "Actual vs Fitted Daily Sales (Bar)")
+
+# Add fitted instantaneous sales
+lines(pred.inst_bm_b_d, col = "red", lwd = 2)
+
+# Add a legend
+legend("topleft", legend = c("Actual Values", "Fitted Values"),
+       col = c("black", "red"), pch = c(16, NA), lty = c(NA, 1), lwd = c(NA, 2))
+
+# Check residuals
+res_bm_b_d <- bar_d_ts - pred.inst_bm_b_d
+tsdisplay(res_bm_b_d)
+# Residuals are not well behaved, seem not stationary and correlated
+
+# Overall the Bass model fits a bell, if we are doing a generalized version
+# let's try one that lets us define a more versatile curve
+
+
+
+## 6.1.3 GGM FOOD-------------
 # Runs on DIMORA
 # documentation: https://cran.rstudio.com/web/packages/DIMORA/DIMORA.pdf
 # bass model preliminary m, p, q for algorithm
 
 # mt argument is the determination of market potential
 ### Monthly----------------------------------
-ggm1 <- GGM(sales_m_ts, mt='base', display = T)
-ggm2 <- GGM(sales_m_ts, mt= function(x) pchisq(x,10),display = T)
+ggm1 <- GGM(food_m_ts, mt='base', display = T)
+ggm2 <- GGM(food_m_ts, mt= function(x) pchisq(x,10),display = T)
 summary(ggm1)
 summary(ggm2)
 # try different functions for market potential
 
-ggm3 <- GGM(sales_m_ts, mt= function(x) log(x),display = T)
-ggm4 <- GGM(sales_m_ts, mt= function(x) (x)**(1/1.05),display = T)
+ggm3 <- GGM(food_m_ts, mt= function(x) log(x),display = T)
+ggm4 <- GGM(food_m_ts, mt= function(x) (x)**(1/1.05),display = T)
 summary(ggm3)
 summary(ggm4)
+
 # predictions
-
-pred_GGM_m<- predict(ggm1, newx=c(1:length(sales_m_ts)))
+pred_GGM_m<- predict(ggm1, newx=c(1:length(food_m_ts)))
+pred_GGM_m<- ts(pred_GGM_m, start=start(food_m_ts), frequency = frequency(food_m_ts))
 pred_GGM_m.inst<- make.instantaneous(pred_GGM_m)
+pred_GGM_m.inst <- ts(pred_GGM_m.inst, start = start(food_m_ts), frequency=frequency(food_m_ts))
 
-plot(sales_m_ts, type= "b",xlab="Month", ylab="Monthly Sales",  pch=16, lty=3, cex=0.6)
-lines(pred_GGM_m.inst, lwd=2, col=2)
+
+
+# plot
+plot(food_m_ts, type = "p", col = "black", pch = 16, cex = 0.7,
+     xlab = "Month", ylab = "Monthly Sales", main = "Actual vs Fitted Sales")
+
+# Add the fitted values as a line
+lines(pred_GGM_m.inst, col = "red", lwd = 2)
+
+# Add a legend
+legend("topleft", legend = c("Actual Values", "Fitted Values"),
+       col = c("black", "red"), pch = c(16, NA), lty = c(NA, 1), lwd = c(NA, 2))
+
+
 
 ###Analysis of residuals
-res_GGM_m<- sales_m_ts - pred_GGM_m.inst
-pred_GGM_m
-tsdisplay(res_GGM_m)
+res_GGM_f_m<- food_m_ts - pred_GGM_m.inst
+tsdisplay(res_GGM_f_m)
 
-plot(c(1:length(res_GGM_m)),res_GGM_m)
 
 # Residuals somehow are kind of stationary
 # check for stationarity of residuals
-adf_test <- adf.test(res_GGM_m)
+adf_test <- adf.test(res_GGM_f_m)
 print(adf_test) # if p-val < alpha, series stationary
 # so with this model we achieve stationary series
 
 # check for autocorrelation in residuals
-Box.test(res_GGM_m, lag = 10, type = "Ljung-Box") # h0 res indep
+Box.test(res_GGM_f_m, lag = 10, type = "Ljung-Box") # h0 res indep
 # p-val > alpha => fail to reject h0, so residuals seem indep
 
 ### Weekly----------------------------------
-ggm1_w <- GGM(sales_w_ts, mt='base', display = T)
-ggm2_w <- GGM(sales_w_ts, mt= function(x) pchisq(x,25),display = T)
+ggm1_w <- GGM(food_w_ts, mt='base', display = T)
+ggm2_w <- GGM(food_w_ts, mt= function(x) pchisq(x,25),display = T)
 summary(ggm1_w) # this one is better
 summary(ggm2_w)
 # try different functions for market potential
 
-ggm3_w <- GGM(sales_w_ts, mt= function(x) log(x),display = T)
-ggm4_w <- GGM(sales_w_ts, mt= function(x) (x)**(1/1.05),display = T)
+ggm3_w <- GGM(food_w_ts, mt= function(x) log(x),display = T)
+ggm4_w <- GGM(food_w_ts, mt= function(x) (x)**(1/1.05),display = T)
 
 summary(ggm3_w)
 summary(ggm4_w) # better shaped but less significant
+
+
+
 # predictions
-
-pred_GGM_w<- predict(ggm1_w, newx=c(1:length(sales_w_ts)))
+pred_GGM_w<- predict(ggm1_w, newx=c(1:length(food_w_ts)))
+pred_GGM_w<- ts(pred_GGM_w, start=start(food_w_ts), frequency = frequency(food_w_ts))
 pred_GGM_w.inst<- make.instantaneous(pred_GGM_w)
+pred_GGM_w.inst <- ts(pred_GGM_w.inst, start = start(food_w_ts), frequency=frequency(food_w_ts))
 
-plot(sales_w_ts, type= "b",xlab="Week", ylab="Weekly Sales",  pch=16, lty=3, cex=0.6)
-lines(pred_GGM_w.inst, lwd=2, col=2)
+
+
+# plot
+plot(food_w_ts, type = "p", col = "black", pch = 16, cex = 0.7,
+     xlab = "Month", ylab = "Weekly Sales", main = "Actual vs Fitted Sales")
+
+# Add the fitted values as a line
+lines(pred_GGM_w.inst, col = "red", lwd = 2)
+
+# Add a legend
+legend("topleft", legend = c("Actual Values", "Fitted Values"),
+       col = c("black", "red"), pch = c(16, NA), lty = c(NA, 1), lwd = c(NA, 2))
+
+
+
+
 
 ###Analysis of residuals
-res_GGM_w<- sales_w_ts - pred_GGM_w.inst
-tsdisplay(res_GGM_w)
+res_GGM_f_w<- food_w_ts - pred_GGM_w.inst
+tsdisplay(res_GGM_f_w)
 # residuals have correlation and structure
-
-plot(c(1:length(res_GGM_w)),res_GGM_w)
-
 # Residuals somehow are kind of stationary
+
 # check for stationarity of residuals
-adf_test <- adf.test(res_GGM_w)
+adf_test <- adf.test(res_GGM_f_w)
 print(adf_test) # if p-val < alpha, series not stationary
 # so with this model we dont achieve stationary series
 
 # check for autocorrelation in residuals
-Box.test(res_GGM_w, lag = 10, type = "Ljung-Box") # h0 res indep
+Box.test(res_GGM_f_w, lag = 10, type = "Ljung-Box") # h0 res indep
 # p-val < alpha =>  reject h0, so residuals are NOT indep
 
 ### Daily----------------------------------
 
-ggm1_d <- GGM(sales_d_ts, mt='base', display = T)
-ggm2_d <- GGM(sales_d_ts, mt= function(x) pchisq(x,10),display = T)
+ggm1_d <- GGM(food_d_ts, mt='base', display = T)
+ggm2_d <- GGM(food_d_ts, mt= function(x) pchisq(x,10),display = T)
 summary(ggm1_d) # this one is better looking
 summary(ggm2_d)
 # try different functions for market potential
 
-ggm3_d <- GGM(sales_d_ts, mt= function(x) log(x),display = T)
-ggm4_d <- GGM(sales_d_ts, mt= function(x) (x)**(1/1.05),display = T)
+ggm3_d <- GGM(food_d_ts, mt= function(x) log(x),display = T)
+ggm4_d <- GGM(food_d_ts, mt= function(x) (x)**(1/1.05),display = T)
 
 summary(ggm3_d)
 summary(ggm1_d)
 summary(ggm4_d) # better shaped and still significant
+
+
 # predictions
-
-pred_GGM_d<- predict(ggm4_d, newx=c(1:length(sales_d_ts)))
+pred_GGM_d<- predict(ggm1_d, newx=c(1:length(food_d_ts)))
+pred_GGM_d<- ts(pred_GGM_d, start=start(food_d_ts), frequency = frequency(food_d_ts))
 pred_GGM_d.inst<- make.instantaneous(pred_GGM_d)
+pred_GGM_d.inst <- ts(pred_GGM_d.inst, start = start(food_d_ts), frequency=frequency(food_d_ts))
 
-plot(sales_d_ts, type= "b",xlab="Day", ylab="Daily Sales",  pch=16, lty=3, cex=0.6)
-lines(pred_GGM_d.inst, lwd=2, col=2)
+
+
+# plot
+plot(food_d_ts, type = "p", col = "black", pch = 16, cex = 0.7,
+     xlab = "Month", ylab = "Daily Sales", main = "Actual vs Fitted Sales")
+
+# Add the fitted values as a line
+lines(pred_GGM_d.inst, col = "red", lwd = 2)
+
+# Add a legend
+legend("topleft", legend = c("Actual Values", "Fitted Values"),
+       col = c("black", "red"), pch = c(16, NA), lty = c(NA, 1), lwd = c(NA, 2))
+
 
 ###Analysis of residuals
-res_GGM_d<- sales_d_ts - pred_GGM_d.inst
-tsdisplay(res_GGM_d)
+res_GGM_f_d <- food_d_ts - pred_GGM_d.inst
+tsdisplay(res_GGM_f_d)
 # residuals have correlation and structure
 
-plot(c(1:length(res_GGM_d)),res_GGM_d)
 
-# Residuals somehow are kind of stationary
 # check for stationarity of residuals
-adf_test <- adf.test(res_GGM_d) # H0: series is stationary
+adf_test <- adf.test(res_GGM_f_d) # H0: series is stationary
 print(adf_test) # if p-val < alpha, series not stationary
 # so with this model we dont achieve stationary series
 
 # check for autocorrelation in residuals
-Box.test(res_GGM_d, lag = 10, type = "Ljung-Box") # h0 res indep
+Box.test(res_GGM_f_d, lag = 10, type = "Ljung-Box") # h0 res indep
 # p-val < alpha =>  reject h0, so residuals are NOT indep
 
 
