@@ -1853,7 +1853,7 @@ tsdisplay(resid1_m)
 # Residuals seem stationary
 
 ### Auto-ARIMA------------
-arima2_m <- auto.arima(sales_m_ts)
+arima2_m <- auto.arima(food_m_ts)
 
 summary(arima2_m)
 summary(arima1_m)
@@ -1865,18 +1865,19 @@ tsdisplay(resid2_m)
 
 ## Weekly------------------
 # see if series is stationary
-adf.test(sales_w_ts) #H0, series is non-stationary
+adf.test(food_w_ts) #H0, series is non-stationary
 # p-val > 0.05 => dont reject, non stationary: series is not stationary
-adf.test(diff(sales_w_ts)) # after diff is sationary
+adf.test(diff(food_w_ts)) # after diff is sationary
+# series is stationary
 
 # see the acf and pacf
-tsdisplay(diff(sales_w_ts))
+tsdisplay(diff(food_w_ts))
 # PACF suggest AR-1
-#ACF suggest MA-1
+#ACF suggest ARIMA 1,1,1
 
 ### Manual ARIMA------------
-# ARIMA(p,d,q) = (1,1,0)
-arima1_w<- Arima(sales_w_ts, order=c(1,1,0))
+# ARIMA(p,d,q) = (1,1,1)
+arima1_w<- Arima(food_w_ts, order=c(1,1,1))
 summary(arima1_w)
 
 # study residual to see if is a good model
@@ -1886,11 +1887,11 @@ tsdisplay(resid1_w)
 # Residuals seem stationary
 
 ### Auto-ARIMA------------
-arima2_w <- auto.arima(sales_w_ts)
+arima2_w <- auto.arima(food_w_ts)
 
 summary(arima2_w)
 summary(arima1_w)
-# Autoarima is better
+# Autoarima is better sigthly
 
 # study residual to see if is a good model
 resid2_w<- residuals(arima2_w)
@@ -1898,20 +1899,21 @@ tsdisplay(resid2_w)
 
 ## Daily------------------
 # see if series is stationary
-adf.test(sales_d_ts) #H0, series is non-stationary
+adf.test(food_d_ts) #H0, series is non-stationary
 # p-val < 0.05 =>  reject non stationary: series might be stationary
 # no need for differencing (?)
 
 # see the acf and pacf
-tsdisplay(sales_d_ts)
+tsdisplay(food_d_ts)
 # But has correlation of great order
 
+tsdisplay(diff(food_d_ts))
 # ACF and PACF show a lot of seasonality
 # try with 2 differences
 
 ### Manual ARIMA------------
 # ARIMA(p,d,q) = (2,1,0)
-arima1_d<- Arima(sales_d_ts, order=c(1,0,1))
+arima1_d<- Arima(food_d_ts, order=c(1,1,1))
 summary(arima1_d)
 
 # study residual to see if is a good model
@@ -1921,9 +1923,9 @@ tsdisplay(resid1_d)
 # Residuals are not stationary - they have autocorrelation
 
 ### Auto-ARIMA------------
-arima2_d <- auto.arima(sales_d_ts)
+arima2_d <- auto.arima(food_d_ts)
 
-summary(arima2_d) # order (5,1,3)
+summary(arima2_d) # order (5,1,5)
 summary(arima1_d)
 # AIC is better in autoarima
 
@@ -1932,11 +1934,123 @@ resid2_d<- residuals(arima2_d)
 tsdisplay(resid2_d)
 # resids have autocorrelation still
 
-## 7.2 SARIMA----------------------------
+
+
+## 7.2 Standard ARIMA BAR---------------------------------
+## Monthly------------------
+plot(bar_m_ts)
+# See if series is stationary
+adf.test(bar_m_ts) #H0, series is non-stationary
+# p-val > 0.05 => dont reject, non stationary: series is not stationary
+adf.test(diff(bar_m_ts)) #H0, series is non-stationary
+
+# See the acf and pacf
+tsdisplay(diff(bar_m_ts)) 
+tsdisplay(bar_m_ts)
+# PACF suggest AR-1
+# ACF suggests confirms?
+
+### Manual ARIMA------------
+# ARIMA(p,d,q) = (1,1,0)
+arima1_b_m <- Arima(bar_m_ts, order = c(1, 1, 0))
+summary(arima1_b_m)
+
+# Study residuals to see if it is a good model
+resid1_b_m <- residuals(arima1_b_m)
+tsdisplay(resid1_b_m)
+
+# Residuals seem stationary
+
+### Auto-ARIMA------------
+arima2_b_m <- auto.arima(bar_m_ts)
+
+summary(arima2_b_m) # arima 0,1,0
+summary(arima1_b_m)
+# AIC is almost the same, but keep the AR-1
+
+# Study residuals to see if it is a good model
+resid2_b_m <- residuals(arima2_b_m)
+tsdisplay(resid2_b_m)
+
+# better arima 1,1,0
+
+## Weekly------------------
+# See if series is stationary
+adf.test(bar_w_ts) #H0, series is non-stationary
+# p-val > 0.05 => dont reject, non stationary: series is not stationary
+adf.test(diff(bar_w_ts)) # after diff is stationary
+# Series is stationary
+
+# See the acf and pacf
+tsdisplay(diff(bar_w_ts))
+# PACF suggest AR-1
+# ACF suggest ARIMA 1,1,0
+
+### Manual ARIMA------------
+# ARIMA(p,d,q) = (1,1,1)
+arima1_b_w <- Arima(bar_w_ts, order = c(1, 1, 0))
+summary(arima1_b_w)
+
+# Study residuals to see if it is a good model
+resid1_b_w <- residuals(arima1_b_w)
+tsdisplay(resid1_b_w)
+
+# Residuals seem stationary
+
+### Auto-ARIMA------------
+arima2_b_w <- auto.arima(bar_w_ts)
+
+summary(arima2_b_w)
+summary(arima1_b_w)
+# Auto-ARIMA is better slightly
+
+# Study residuals to see if it is a good model
+resid2_b_w <- residuals(arima2_b_w)
+tsdisplay(resid2_b_w)
+
+## Daily------------------
+# See if series is stationary
+adf.test(bar_d_ts) #H0, series is non-stationary
+# p-val < 0.05 => reject non-stationary: series might be stationary
+# No need for differencing (?)
+
+# See the acf and pacf
+tsdisplay(bar_d_ts)
+# But has correlation of great order
+
+tsdisplay(diff(bar_d_ts))
+# ACF and PACF show a lot of seasonality
+# Try with 2 differences
+
+### Manual ARIMA------------
+# ARIMA(p,d,q) = (1,1,1)
+arima1_b_d <- Arima(bar_d_ts, order = c(1, 1, 1))
+summary(arima1_b_d)
+
+# Study residuals to see if it is a good model
+resid1_b_d <- residuals(arima1_b_d)
+tsdisplay(resid1_b_d)
+
+# Residuals are not stationary - they have autocorrelation
+
+### Auto-ARIMA------------
+arima2_b_d <- auto.arima(bar_d_ts)
+
+summary(arima2_b_d) # Order (5,1,3)
+summary(arima1_b_d)
+# AIC is better in auto-ARIMA
+
+# Study residuals to see if it is a good model
+resid2_b_d <- residuals(arima2_b_d)
+tsdisplay(resid2_b_d)
+# Residuals have autocorrelation still
+
+
+## 7.2 SARIMA FOOD----------------------------
 ## Daily-------------------------
-tsdisplay(sales_d_ts) # 
-tsdisplay(diff(sales_d_ts))
-sarima1_d<- Arima(sales_d_ts, order=c(0,1,1), seasonal=c(0,0,1))
+tsdisplay(food_d_ts) # 
+tsdisplay(diff(food_d_ts))
+sarima1_d<- Arima(food_d_ts, order=c(0,1,1), seasonal=c(0,0,1))
 summary(sarima1_d)
 
 # study residual to see if is a good model
@@ -1946,7 +2060,7 @@ tsdisplay(resid1_ds)
 
 
 # Fit auto.arima with seasonal components
-sarima2_d <- auto.arima(sales_d_ts, seasonal=TRUE)
+sarima2_d <- auto.arima(food_d_ts, seasonal=TRUE)
 summary(sarima2_d)
 # model 2 is better, lower AIC
 resid2_ds<- residuals(sarima2_d)
