@@ -2050,7 +2050,9 @@ tsdisplay(resid2_b_d)
 ## Daily-------------------------
 tsdisplay(food_d_ts) # 
 tsdisplay(diff(food_d_ts))
-sarima1_d<- Arima(food_d_ts, order=c(0,1,1), seasonal=c(0,0,1))
+# still not stationary
+frequency(food_d_ts)
+sarima1_d<- Arima(food_d_ts,  order = c(1,1,1),seasonal=list(order=c(0,0,1), period=7)) # period 7 to adjust seasonal behaviour
 summary(sarima1_d)
 
 # study residual to see if is a good model
@@ -2064,28 +2066,57 @@ sarima2_d <- auto.arima(food_d_ts, seasonal=TRUE)
 summary(sarima2_d)
 # model 2 is better, lower AIC
 resid2_ds<- residuals(sarima2_d)
-tsdisplay(resid2_ds)
-
-#still some autocorrelation at lags 5,9
+tsdisplay(resid2_ds, lag.max = 30)
+#still some autocorrelation maybe
 # check for autocorrelation
-Box.test(residuals(sarima2_d), lag=10, type="Ljung-Box")
-# A low p-value (<0.05) suggests residual autocorrelation.
-# Residuals have autocorrelation
 
+Box.test(residuals(sarima2_d), lag=30, type="Ljung-Box")
+# A low p-value (<0.05) suggests residual autocorrelation.
+# Residuals have no autocorrelation
+
+## 7.3 SARIMA BAR----------------------------
+## Daily-------------------------
+tsdisplay(bar_d_ts, lag.max = 30)
+tsdisplay(diff(bar_d_ts), lag.max = 30)
+# still not stationary
+frequency(bar_d_ts)
+sarima1_b_d<- Arima(bar_d_ts,  order = c(1,1,1),seasonal=list(order=c(0,0,1), period=7)) # period 7 to adjust seasonal behaviour
+summary(sarima1_b_d)
+
+# study residual to see if is a good model
+resid1_b_ds<- residuals(sarima1_b_d)
+tsdisplay(resid1_b_ds, lag.max= 30)
+# autocorrelation still present
+
+
+# Fit auto.arima with seasonal components
+sarima2_b_d <- auto.arima(bar_d_ts, seasonal=TRUE)
+summary(sarima2_b_d)
+# model 2 is better, lower AIC
+resid2_b_ds<- residuals(sarima2_b_d)
+tsdisplay(resid2_b_ds, lag.max = 30)
+# still some autocorrelation
+# check for autocorrelation
+
+Box.test(residuals(sarima2_b_d), lag=30, type="Ljung-Box")
+# A low p-value (<0.05) suggests residual autocorrelation.
+# Residuals have  autocorrelation
 # Need to adress by doing SARIMAX
-## 7.3 SARIMAX---------------------
+
+## 7.4 SARIMAX FOOD---------------------
 ### Daily--------------------------
 
-# readefine sales_d_ts
+# re-define food_d_ts
 head(df_merged_d)
-sales_d_ts <- ts(exp(df_merged_d$sales_cop), frequency=365, start=c(2021, 334))  # 334 is November 30
-seasonal_sales_d_ts <- ts(exp(df_merged_d$sales_cop), frequency=7, start=c(2021, 334))  # 334 is November 30
-plot(sales_d_ts)
-tsdisplay(sales_d_ts,lag.max = 30)
-tsdisplay(seasonal_sales_d_ts,lag.max = 30)
+plot(food_d_ts)
+tsdisplay(food_d_ts,lag.max = 30)
+
 # define regresors
 # Select specific columns by name
 x_regressors_d <- df_merged_d %>% select(rain_sum, fx, tmedian)
+
+length(food_d_ts) == nrow(x_regressors_d) # check they are the same length
+
 # Apply the exponential function to each column
 x_regressors_d <- as.data.frame(apply(x_regressors_d, 2, exp))
 # Convert to a matrix for ARIMA modeling
@@ -2094,7 +2125,7 @@ x_regressors_d <- as.matrix(x_regressors_d)
 # fit the model on sales
 # Fit an auto.arima model with seasonal component and external regressors
 sarimax_model_d <- auto.arima(
-  sales_d_ts,
+  food_d_ts,
   seasonal = TRUE,               # Enable seasonal components
   xreg = x_regressors_d          # External regressors
 )
@@ -2105,35 +2136,17 @@ summary(sarimax_model_d)
 # Validate residuals
 checkresiduals(sarimax_model_d)
 
-# fit the model on seasonal sales
-# Fit an auto.arima model with seasonal component and external regressors
-sarimax_model_d2 <- auto.arima(
-  seasonal_sales_d_ts,
-  seasonal = TRUE,               # Enable seasonal components
-  xreg = x_regressors_d          # External regressors
-)
-
-# Display the summary of the fitted model
-summary(sarimax_model_d2)
-
-# Validate residuals
-checkresiduals(sarimax_model_d2)
-# they still escape the confidence intervals
-
-resid_sarimax2_seasonal <- residuals(sarimax_model_d2)
-adf.test(resid_sarimax2_seasonal)
-Box.test(resid_sarimax2_seasonal, lag = 10, type = "Ljung-Box")
-# Ljung Box indicates resids are white noise, at p-val 0.05
-# But ADF Test says the resids are stationary
-tsdisplay(resid_sarimax2_seasonal)
 
 # set a search for best model
 sarimax_model_d3 <- auto.arima(
-  seasonal_sales_d_ts,
+  food_d_ts,
   seasonal = TRUE,
   xreg = x_regressors_d,
   max.p = 5, max.q = 5, max.P = 2, max.Q = 2,
   stepwise = FALSE, approximation = FALSE)
+
+# check residuals
+checkresiduals(sarimax_model_d3)
 
 # get residuals
 resid_sarimax3_seasonal <- residuals(sarimax_model_d3)
@@ -2150,23 +2163,70 @@ Box.test(resid_sarimax3_seasonal, lag = 10, type = "Ljung-Box")
 tsdisplay(resid_sarimax3_seasonal, lag.max = 30)
 # we see lags with correlation
 
-checkresiduals(resid_sarimax3_seasonal)
+## 7.5 SARIMAX FOOD---------------------
+### Daily--------------------------
+
+
+
+# fit the model on bar
+# Fit an auto.arima model with seasonal component and external regressors
+sarimax_model_b_d <- auto.arima(
+  bar_d_ts,
+  seasonal = TRUE,               # Enable seasonal components
+  xreg = x_regressors_d          # External regressors
+)
+
+# Display the summary of the fitted model
+summary(sarimax_model_b_d)
+
+# Validate residuals
+checkresiduals(sarimax_model_b_d)
+
+
+# set a search for best model
+sarimax_model_b_d3 <- auto.arima(
+  bar_d_ts,
+  seasonal = TRUE,
+  xreg = x_regressors_d,
+  max.p = 5, max.q = 5, max.P = 2, max.Q = 2,
+  stepwise = FALSE, approximation = FALSE)
+
+# check residuals
+checkresiduals(sarimax_model_b_d3)
+
+# get residuals
+resid_sarimax3_b_seasonal <- residuals(sarimax_model_b_d3)
+
+# ADF Test for stationarity
+adf.test(resid_sarimax3_b_seasonal)
+# are stationary according to adf test
+
+# Ljung-Box Test for autocorrelation
+Box.test(resid_sarimax3_b_seasonal, lag = 10, type = "Ljung-Box")
+# serial correlation accoriding to this
+
+# ACF and PACF plots
+tsdisplay(resid_sarimax3_b_seasonal, lag.max = 30)
+# we see lags with correlation
+# Need to extend model to fix this
+
+
 
 # 8. Model Mixture--------------
-## 8.1 GGM + SARIMA----------------
+## 8.1 GGM + SARIMA FOOD----------------
 ### Weekly------------------------------
 #### GGM-------------------------------
 
 summary(ggm1_w) # this one is best model found
 
 
-pred_GGM_w<- predict(ggm1_w, newx=matrix(1:length(sales_w_ts), ncol=1))
+pred_GGM_w <- predict(ggm1_w, newx=matrix(1:length(food_w_ts), ncol=1))
 pred_GGM_w.inst<- make.instantaneous(pred_GGM_w)
 pred_GGM_w.inst
 
 # set same timeframe for GGM preds
-start_time_w <- start(sales_w_ts)  # Get start time from sales_w_ts
-frequency_w <- frequency(sales_w_ts)  # Get frequency from sales_w_ts
+start_time_w <- start(food_w_ts)  # Get start time from sales_w_ts
+frequency_w <- frequency(food_w_ts)  # Get frequency from sales_w_ts
 
 # Convert pred_GGM to a numeric vector
 pred_GGM_w_vec <- unlist(pred_GGM_w.inst)  # Flatten the list to a numeric vector
@@ -2174,31 +2234,30 @@ pred_GGM_w_vec <- unlist(pred_GGM_w.inst)  # Flatten the list to a numeric vecto
 pred_GGM_w_ts <- ts(pred_GGM_w_vec, start = start_time_w, frequency = frequency_w)
 
 
-plot(sales_w_ts, type= "b",xlab="Week", ylab="Weekly Sales",  pch=16, lty=3, cex=0.6)
+plot(food_w_ts, type= "b",xlab="Week", ylab="Weekly Sales",  pch=16, lty=3, cex=0.6)
 lines(pred_GGM_w_ts, col = "red", lty = 2)
 
 
 #### SARMAX refinement------------------------
 
+fit.food_w <- fitted(ggm1_w)  # Predicted values from the GGM model
 
-fit.sales_w <- fitted(ggm1_w)  # Predicted values from the GGM model
-
-if (length(fit.sales_w) != length(sales_w_ts)) {
-  stop("fit.sales_w and sales_w_ts lengths do not match")
+if (length(fit.food_w) != length(food_w_ts)) {
+  stop("lengths do not match")
 }
 
-summary(fit.sales_w) 
-length(fit.sales_w) == length(cumsum(sales_w_ts))  # Should return TRUE
+summary(fit.food_w) 
+length(fit.food_w) == length(cumsum(food_w_ts))  # Should return TRUE
 
-fit.sales_w <- scale(fit.sales_w) # scale regresor to make convergence
+fit.food_w <- scale(fit.food_w) # scale regresor to make convergence
 
-sales_w_ts_scaled <- scale(cumsum(sales_w_ts))  # Scale the time series because if not will not reach convergence
+food_w_ts_scaled <- scale(cumsum(food_w_ts))  # Scale the time series because if not will not reach convergence
 
 sarima_w <- Arima(
-  sales_w_ts_scaled, 
+  food_w_ts_scaled, 
   order = c(1, 0, 1), 
   seasonal = list(order = c(0, 0, 1), period = 52), 
-  xreg = fit.sales_w # this is the GGM fitted values
+  xreg = fit.food_w # this is the GGM fitted values
 )
 
 summary(sarima_w)
@@ -2208,8 +2267,8 @@ summary(sarima_w)
 fitted_cumulative <- fitted(sarima_w)
 
 # Reverse scaling transformation to get fitted cumulative values in the original scale
-scaling_center <- attr(sales_w_ts_scaled, "scaled:center")
-scaling_scale <- attr(sales_w_ts_scaled, "scaled:scale")
+scaling_center <- attr(food_w_ts_scaled, "scaled:center")
+scaling_scale <- attr(food_w_ts_scaled, "scaled:scale")
 
 fitted_cumulative_original <- fitted_cumulative * scaling_scale + scaling_center
 
@@ -2219,8 +2278,8 @@ fitted_instantaneous <- diff(c(fitted_cumulative_original, NA))  # Add NA to ali
 # Create a time series object for the fitted instantaneous values
 fitted_instantaneous_ts <- ts(
   fitted_instantaneous, 
-  start = start(sales_w_ts), 
-  frequency = frequency(sales_w_ts)
+  start = start(food_w_ts), 
+  frequency = frequency(food_w_ts)
 )
 
 # Check the fitted instantaneous values
@@ -2230,7 +2289,7 @@ plot(fitted_instantaneous_ts)
 # plot
 
 # Plot original instantaneous values vs fitted instantaneous values
-plot(sales_w_ts, type = "p", col = "blue", pch = 16,
+plot(food_w_ts, type = "p", col = "blue", pch = 16,
      main = "Original vs Fitted Instantaneous Values",
      xlab = "Time", ylab = "Instantaneous Values")
 
@@ -2238,9 +2297,10 @@ plot(sales_w_ts, type = "p", col = "blue", pch = 16,
 lines(fitted_instantaneous_ts, col = "red", lwd = 3, lty = 1)
 
 # Add legend
-legend("topright", legend = c("Original Instantaneous", "Fitted Instantaneous"),
+legend("topleft", legend = c("Original Instantaneous", "Fitted Instantaneous"),
        col = c("blue", "red"), lty = c(NA, 1), pch = c(16, NA), lwd = c(NA, 3))
 
+#!!!!!!!!! VOY ACA-----------------------------------------------------
 #### Residuals-----------------------
 # Step 1: Extract residuals from the SARIMA model
 resid_w <- residuals(sarima_w)
