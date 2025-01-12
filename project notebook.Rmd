@@ -33,7 +33,7 @@ library(DIMORA)
 ### Import Data
 
 ```{r}
-setwd('/Users/fabiopimentel/Documents/Padua/clases/segundo año primer semestre/BEF data/proyecto/time_series_padova-main')
+#setwd('/Users/fabiopimentel/Documents/Padua/clases/segundo año primer semestre/BEF data/proyecto/time_series_padova-main')
 
 # target variable
 sales <- read_excel("data/sales/sales_dimsum_31102024.xlsx")
@@ -1290,7 +1290,7 @@ prophet_sales_m <- prophet(df_prophet_m)
 
 ```{r}
 future_sales_m <- make_future_dataframe(prophet_sales_m, 
-                                        periods = 4,
+                                        periods = 14,
                                         freq = 'month',
                                         include_history = T
                                         )
@@ -1299,7 +1299,7 @@ tail(future_sales_m)
 
 ```{r}
 forecast_sales_m <- predict(prophet_sales_m, future_sales_m)
-tail(forecast[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
+tail(forecast_sales_m[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
 
 plot(prophet_sales_m, forecast_sales_m)
 ```
@@ -1328,7 +1328,7 @@ head(df_sales_w)
 # model with no seasonality
 df_prophet_w <- df_sales_w[1:2]
 colnames(df_prophet_w) = c("ds", "y")
-df_prophet
+df_prophet_w
 
 #prophet_sales_w <- prophet(df_prophet, daily.seasonality = TRUE)
 prophet_sales_w <- prophet(df_prophet_w)
@@ -1342,7 +1342,7 @@ historical dates so we can evaluate in-sample fit.
 
 ```{r}
 future_sales_w <- make_future_dataframe(prophet_sales_w, 
-                                        periods = 12,
+                                        periods = 52,
                                         freq = 'week',
                                         include_history = T)
 tail(future_sales_w)
@@ -1356,7 +1356,7 @@ uncertainty intervals and seasonal components.
 ```{r}
 # R
 forecast_sales_w <- predict(prophet_sales_w, future_sales_w)
-tail(forecast[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
+tail(forecast_sales_w[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
 ```
 
 ```{r}
@@ -1398,7 +1398,7 @@ prophet_sales_d <- prophet(df_prophet)
 
 ```{r}
 future_sales_d <- make_future_dataframe(prophet_sales_d,
-                                        periods = 100,
+                                        periods = 60,
                                         freq = 'day',
                                         include_history = T)
 tail(future_sales_w)
@@ -1406,7 +1406,7 @@ tail(future_sales_w)
 
 ```{r}
 forecast_sales_d <- predict(prophet_sales_d, future_sales_d)
-tail(forecast[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
+tail(forecast_sales_d[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
 ```
 
 ```{r}
