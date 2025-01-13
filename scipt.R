@@ -306,12 +306,11 @@ df_sales_m_filtered <- df_merged_m %>%
 head(df_sales_m_filtered)
 
 tseries_m <- ts(df_sales_m_filtered$sales_m , start = c(2022, 1), frequency = 12)
-tseries_m
+head(tseries_m)
 seasonplot(tseries_m, col = rainbow(3), year.labels = TRUE, main = "Seasonal Plot")
 text(x = 1, y = max(tseries_m) - 1e6, labels = "2024", col = "blue")
 
 ## 3.5 Density--------------
-
 ### 3.5.1 Monthly-------------
 # Select the columns of interest
 variables <- c("sales_m", "bar_m", "food_m", "rain_m", "fx_m", "google_m",
@@ -1181,7 +1180,6 @@ summary(ggm3_w)
 summary(ggm4_w) # better shaped but less significant
 
 # predictions
-
 pred_ggm_w <- predict(ggm1_w, newx = c(1:length(sales_w_ts)))
 pred_ggm_w <- ts(pred_ggm_w, start = start(sales_w_ts), frequency = frequency(sales_w_ts))
 pred.inst_ggm_w <- make.instantaneous(pred_ggm_w)
@@ -1765,6 +1763,12 @@ if (ljung_box_test$p.value > 0.05) {
   cat("The residuals show significant autocorrelation.\n")
 }
 
+
+#### RMSE for SARIMAX Predictions ####
+rmse_sarimax <- calculate_rmse(observed = sales_w_ts, predicted = fitted_instantaneous_ts)
+
+# Print RMSE for SARIMAX
+cat("RMSE for SARIMAX Predictions:", rmse_sarimax, "\n")
 
 # 9. Gradient Boosting-----------------------------
 # 10. Prophet--------------------------

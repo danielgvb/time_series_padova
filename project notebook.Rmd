@@ -16,8 +16,10 @@ Authors: Daniel Gutierrez & Fabio Pimentel
 
 ```{r}
 # Required Packages--------------------
+rm(list = ls())
 library(readxl)
 library(ggplot2)
+library(GGally)
 library(dplyr)
 library(lubridate)
 library(corrplot)
@@ -28,6 +30,8 @@ library(tidyr)
 library(ggthemes)
 library(car)
 library(DIMORA)
+library(tseries)
+library(lmtest)
 ```
 
 ### Import Data
@@ -60,6 +64,7 @@ temp <- read_excel("data/other/temperature_data.xlsx")
 temp[is.na(temp)] <- 0
 rain[is.na(rain)] <- 0
 plot(temp$tavg) # no zeros in temp : OK
+plot(temp$tmedian) # no zeros in temp : OK- looks better than mean
 ```
 
 ### Explore data structure
@@ -112,7 +117,7 @@ df_sales_m <- sales %>%
   mutate(month = floor_date(date, "month")) %>% # Extract month
   group_by(month) %>%
   summarise(sales_m = sum(sales_cop), bar_m = sum(bar), food_m = sum(food)
-  )     # Summing values
+            )     # Summing values
 
 head(df_sales_m)
 ```
@@ -277,14 +282,20 @@ df_merged_m <- merge(df_merged_m, df_temp_m, by="month", all=F)
 nrow(df_merged_m)
 ```
 
-### Plotting Sales
+### EDA
+
+```{r}
+objects_to_keep <- c("df_merged_d", "df_merged_w", "df_merged_m")
+# Remove all objects except those specified
+rm(list = setdiff(ls(), objects_to_keep))
+```
 
 #### Daily Sales
 
 ```{r}
 # sales daily
 ggplot(
-  sales, 
+  df_merged_d, 
   aes(x=date, y=sales_cop)
   ) + geom_line() + ggtitle("Daily Sales of Restaurant")
 ```
@@ -293,7 +304,7 @@ ggplot(
 
 ```{r}
 # sales weekly
-ggplot(df_sales_w, aes(x=week, y=sales_w)) +
+ggplot(df_merged_w, aes(x=week, y=sales_w)) +
   geom_line() + ggtitle("Weekly Sales of Restaurant")
 ```
 
@@ -301,7 +312,7 @@ ggplot(df_sales_w, aes(x=week, y=sales_w)) +
 
 ```{r}
 # sales montly
-ggplot(df_sales_m, aes(x=month, y=sales_m)) +
+ggplot(df_merged_m, aes(x=month, y=sales_m)) +
   geom_line() + ggtitle("Monthly Sales of Restaurant")
 ```
 
@@ -325,7 +336,7 @@ decision on how to assign your categorical variables
 ```{r}
 #Monthly
 # Reshape the data to a long format
-df_sales_m_long <- df_sales_m %>%
+df_sales_m_long <- df_merged_m %>%
   pivot_longer(cols = c(bar_m, food_m), names_to = "Category", values_to = "Value")
 
 # Create the stacked bar plot
@@ -339,7 +350,13 @@ ggplot(df_sales_m_long, aes(x = month, y = Value, fill = Category)) +
 ```{r}
 # Weekly
 # Reshape the data to a long format
-df_sales_w_long <- df_sales_w %>%
+df_sales_w_long <- df_merged
+```
+
+
+
+```{r}
+df_sales_w_long <- df_merged_w %>%
   pivot_longer(cols = c(bar_w, food_w), names_to = "Category", values_to = "Value")
 
 # Create the stacked bar plot
@@ -354,34 +371,217 @@ ggplot(df_sales_w_long, aes(x = week, y = Value, fill = Category)) +
 
 ```{r}
 # Seasonal plots
-df_sales_w_filtered <- df_sales_w %>%
+df_sales_w_filtered <- df_merged_w %>%
   filter(week >= ymd("2021-12-31"))
 
-tseries_w <- ts(df_sales_w_filtered$sales_w, 
-                start = c(2022, 1), 
-                frequency = 52
-                )
-tseries_w
 
-ggseasonplot(tseries_w, 
-           col = rainbow(3), 
-           year.labels = TRUE,
-           main = "Seasonal Plot"
-           )  + theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))
+tseries_w <- ts(df_sales_w_filtered$sales_w , start = c(2022, 1), frequency = 52)
+head(tseries_w)
+seasonplot(tseries_w, col = rainbow(3), year.labels = TRUE, main = "Seasonal Plot")
+text(x = 1, y = max(tseries_w) - 1.5e7, labels = "2024", col = "blue")
+
 
 ```
 
 ```{r}
 # seasonplot monthly
-head(df_sales_m)
-df_sales_m_filtered <- df_sales_m %>% filter(month >= ymd("2021-12-31"))
-head(df_sales_m_filtered)
+df_sales_m_filtered <- df_merged_m %>%
+  filter(month >= ymd("2021-12-31"))
+
 
 tseries_m <- ts(df_sales_m_filtered$sales_m , start = c(2022, 1), frequency = 12)
-tseries_m
+head(tseries_m)
+seasonplot(tseries_m, col = rainbow(3), year.labels = TRUE, main = "Seasonal Plot")
+text(x = 1, y = max(tseries_m) - 1e6, labels = "2024", col = "blue")
 
-ggseasonplot(tseries_m, col = rainbow(3), year.labels = TRUE, main = "Seasonal Plot")
 ```
+## Density
+```{r}
+# Montly Density
+# Select the columns of interest
+variables <- c("sales_m", "bar_m", "food_m", "rain_m", "fx_m", "google_m",
+               "ise", "inflation", "unemployment", "temp_m", "prcp_m")
+
+
+# Transform the data to long format for ggplot2
+df_long_m <- df_merged_m %>%
+  pivot_longer(cols = all_of(variables), names_to = "Variable", values_to = "Value")
+
+# Create the grid of density plots
+ggplot(df_long_m, aes(x = Value)) +
+  geom_density(fill = "blue", alpha = 0.4) +
+  facet_wrap(~ Variable, scales = "free", ncol = 3) +
+  labs(title = "Density Plots of Selected Variables",
+       x = "Value", y = "Density") +
+  theme_minimal()
+
+```
+
+```{r}
+# Weekly Density
+# Select the columns of interest
+variables <- c("sales_w", "bar_w", "food_w", "rain_w", "fx_w", "google_w",
+                "temp_w", "prcp_w")
+
+
+
+df_long_w <- df_merged_w %>%
+  pivot_longer(cols = all_of(variables), names_to = "Variable", values_to = "Value")
+
+# Create the grid of density plots
+ggplot(df_long_w, aes(x = Value)) +
+  geom_density(fill = "blue", alpha = 0.4) +
+  facet_wrap(~ Variable, scales = "free", ncol = 3) +
+  labs(title = "Density Plots of Selected Variables",
+       x = "Value", y = "Density") +
+  theme_minimal()
+
+```
+
+
+```{r}
+# Daily Density
+
+# Select the columns of interest
+variables <- c("sales_cop", "bar", "food", "rain_sum", "fx", 
+               "tmedian", "prcp")
+
+
+
+df_long_d <- df_merged_d %>%
+  pivot_longer(cols = all_of(variables), names_to = "Variable", values_to = "Value")
+
+# Create the grid of density plots
+ggplot(df_long_d, aes(x = Value)) +
+  geom_density(fill = "blue", alpha = 0.4) +
+  facet_wrap(~ Variable, scales = "free", ncol = 3) +
+  labs(title = "Density Plots of Selected Variables",
+       x = "Value", y = "Density") +
+  theme_minimal()
+
+```
+
+## Covariates
+
+```{r}
+### 3.5.1 economic variables-----------------------
+# economic growth
+ggplot(df_merged_m, aes(x=month, y=ise)) +
+  geom_line() + ggtitle("Monthly activity in Colombia")
+# clearly seasonal and trend
+
+# fx
+ggplot(df_merged_d, aes(x=date, y=fx)) +
+  geom_line() + ggtitle("Daily COP/USD")
+# trend but no clear seasonality
+
+# inflation
+ggplot(df_merged_m, aes(x=month, y=inflation)) +
+  geom_line() + ggtitle("Monthly inflation National")
+# business cycles, no tend or seasonality
+
+# unemployment
+ggplot(df_merged_m, aes(x=month, y=unemployment)) +
+  geom_line() + ggtitle("Montly trailing unemployment Medellin")
+# seasonal and trend downwards
+
+
+### 3.5.2 Other variables
+
+# google trends
+ggplot(df_merged_w, aes(x=week, y=google_w)) +
+  geom_line() + ggtitle("Weelkly Google trends 'Restaurantes'")
+# no clear behaviour, drop in pandemic
+
+# rain
+ggplot(df_merged_d, aes(x=date, y=rain_sum)) +
+  geom_line() + ggtitle("Daily rain approximated in Antioquia")
+# no trend or seasonality clearly
+
+# temperature
+ggplot(df_merged_d, aes(x=date, y=tmedian)) +
+  geom_line() + ggtitle("Daily Median temperature in Medellin")
+
+# almost stationary
+
+# temperature
+ggplot(df_merged_d, aes(x=date, y=tavg)) +
+  geom_line() + ggtitle("Daily Average temperature in Medellin")
+
+
+# this one looks weird, better keep working on median
+
+# precipitation from temp
+ggplot(df_merged_d, aes(x=date, y=prcp)) +
+  geom_line() + ggtitle("Daily  precipitation in Medellin")
+# looks decent
+
+```
+
+### Pairplots
+
+```{r}
+df_merged_d <- subset(df_merged_d, select = -region)
+
+# daily
+ggpairs(df_merged_d, 
+        columns = 2:8)
+# sales have correl with fx and rain_sum
+# weekly
+ggpairs(df_merged_w, 
+        columns = 2:9)
+# sales have correl with rain, google, fx, temp
+# bar has more correl with temp
+
+# montly
+ggpairs(df_merged_m, 
+        columns = 2:12)
+
+```
+
+### Correlation Matrix
+
+```{r}
+# Exclude 'date' column
+numeric_df_d <- df_merged_d[, sapply(df_merged_d, is.numeric)]
+cor_matrix_d <- cor(numeric_df_d, use = "complete.obs")  # Use only complete rows
+cor_matrix_d
+
+numeric_df_w <- df_merged_w[, sapply(df_merged_w, is.numeric)]
+cor_matrix_w <- cor(numeric_df_w, use = "complete.obs")  # Use only complete rows
+cor_matrix_w
+
+numeric_df_m <- df_merged_m[, sapply(df_merged_m, is.numeric)]
+cor_matrix_m <- cor(numeric_df_m, use = "complete.obs")  # Use only complete rows
+cor_matrix_m
+
+# Plot the Correlation Matrix
+par(mfrow=c(1,1))
+corrplot(cor_matrix_d, method = "color", type = "upper", tl.col = "black", tl.srt = 45)
+corrplot(cor_matrix_w, method = "color", type = "upper", tl.col = "black", tl.srt = 45)
+corrplot(cor_matrix_m, method = "color", type = "upper", tl.col = "black", tl.srt = 45)
+
+```
+Rain has stronger correlation than prcp, so we drop prcp to not repeat the same variable from two sources
+Also we drop average temperature because median temperature seems more trustworthy
+
+```{r}
+# drop prcp beacuse they "are the same"
+df_merged_m <- df_merged_m %>% select(-prcp_m)
+df_merged_w <- df_merged_w %>% select(-prcp_w)
+df_merged_d <- df_merged_d %>% select(-prcp)
+
+# drop avg temp
+df_merged_d <- df_merged_d %>% select(-tavg)
+colnames(df_merged_d)
+```
+```{r}
+### drop everything not on use
+objects_to_keep <- c("df_merged_d", "df_merged_w", "df_merged_m")
+# Remove all objects except those specified
+rm(list = setdiff(ls(), objects_to_keep))
+```
+
 
 ### Variable Transformation
 
@@ -468,16 +668,52 @@ df_merged_d <- df_merged_d %>%
                                                          "Thursday", "Friday", "Saturday", "Sunday")))  # Day of the week as ordered factor
 ```
 
-### Autocorrelation
+### Time Series Objects
+Convert sales to time series objects for the use in several models
 
 ```{r}
-## Autocorrelation--------------
 # convert to time series
 sales_d_ts <- ts(df_merged_d$sales_cop)
 sales_w_ts <- ts(df_merged_w$sales_w)
 sales_m_ts <- ts(df_merged_m$sales_m)
-plot(sales_m_ts)
+
+par(mfrow=c(1,1))
+
+# Daily
+tsdisplay(sales_d_ts)
+# is not stationary but has no clear trend
+# and seasonality every 7 days
+
+# Weekly
+tsdisplay(sales_w_ts)
+# not stationary: has trend
+
+# Montly
+tsdisplay(sales_m_ts)
+# has clear trend, no seasonality
+
 ```
+
+### Log Transformation
+Some variables are scaled to log, so we can interpret the linear models more easily. The covariates are in different scales so it is easier to interpret percentage changes instead of unit changes.
+
+```{r}
+# Monthly
+df_merged_m <- df_merged_m %>%
+  mutate(across(where(is.numeric) & !all_of(c("unemployment", "inflation")), ~ log(. + 1)))
+
+# Weekly
+df_merged_w <- df_merged_w %>%
+  mutate(across(where(is.numeric), ~ log(. + 1)))
+
+# Daily
+# Weekly
+df_merged_d <- df_merged_d %>%
+  mutate(across(where(is.numeric), ~ log(. + 1)))
+
+```
+
+### Autocorrelation
 
 ```{r}
 #par(mfrow=c(1,1))
@@ -513,25 +749,426 @@ pacf(sales_m_ts)
 # has clear trend, no seasonality
 ```
 
+
+# Models
+In this section we model the time series using various approaches to find the best model for our data.
+We use both linear and non linear models going from the simplest to the more "complex" models.
+
+
+## Helper functions
+Functions that help us implement and analyze models faster
 ```{r}
-#df_merged_m = subset(df_merged_m, select = -c(month) )
-## Log transformation----------
+## Function to create and summarize models------------------
+run_model <- function(formula, data, model_name) {
+  cat("\nRunning", model_name, "\n")
+  model <- lm(formula, data = data)
+  print(summary(model))
+  par(mfrow = c(2, 2))
+  plot(model)
+  return(model)
+}
 
-# Monthly
-df_merged_m <- df_merged_m %>%
-  mutate(across(where(is.numeric) & !all_of(c("unemployment", "inflation")), ~ log(. + 1)))
+# Function to compare models using ANOVA
+compare_models <- function(model1, model2, name1, name2) {
+  cat("\nComparing Models:", name1, "vs", name2, "\n")
+  anova_result <- anova(model1, model2)
+  print(anova_result)
+  return(anova_result)
+}
 
-# Weekly
-df_merged_w <- df_merged_w %>%
-  mutate(across(where(is.numeric), ~ log(. + 1)))
+# Function to add predictions to the dataset
+add_predictions <- function(model, data, pred_column) {
+  data[[pred_column]] <- predict(model, newdata = data)
+  return(data)
+}
 
-# Daily
-df_merged_d <- df_merged_d %>%
-  mutate(across(where(is.numeric), ~ log(. + 1)))
+# Calculate RMSE
+# Function to calculate RMSE
+calculate_rmse <- function(observed, predicted) {
+  rmse <- sqrt(mean((observed - predicted)^2, na.rm = TRUE))
+  return(rmse)
+}
+
+
+# function that compares linear models
+# Define the function to get R^2 and AIC
+get_model_stats <- function(models) {
+  # Initialize an empty data frame
+  stats <- data.frame(
+    Model = character(),
+    R2 = numeric(),
+    AIC = numeric(),
+    stringsAsFactors = FALSE
+  )
+  
+  # Loop through the list of models
+  for (i in seq_along(models)) {
+    model <- models[[i]]
+    model_name <- names(models)[i]
+    # Extract R^2 and AIC
+    r2 <- summary(model)$r.squared
+    aic <- AIC(model)
+    # Append to the data frame
+    stats <- rbind(stats, data.frame(Model = model_name, R2 = r2, AIC = aic))
+  }
+  
+  return(stats)
+}
+
+```
+
+
+## Linear models
+
+```{r}
+# Montly Models
+# View Dataframe
+head(df_merged_m)
+
+# Model 0: Trend only
+ols0 <- run_model(sales_m ~ numeric_month, df_merged_m, "Model 0")
+df_merged_m <- add_predictions(ols0, df_merged_m, "predicted_sales0")
+
+# Model 1: Trend + Seasonality
+ols1 <- run_model(sales_m ~ numeric_month + seasonal_month, df_merged_m, "Model 1")
+df_merged_m <- add_predictions(ols1, df_merged_m, "predicted_sales1")
+
+
+## Model 2: Backward Stepwise Regression 
+
+# Start with the full model (excluding food and bar)
+ols2_full <- lm(
+  sales_m ~ numeric_month + seasonal_month + unemployment + ise + fx_m +
+    google_m + temp_m + rain_m, 
+  data = df_merged_m
+)
+
+
+# Perform backward stepwise regression
+ols2_stepwise <- step(
+  ols2_full, 
+  direction = "backward",
+  trace = 1 # Prints the stepwise regression process
+)
+
+# Summary of the final stepwise model
+summary(ols2_stepwise)
+
+# Add predictions from the final stepwise model
+df_merged_m <- add_predictions(ols2_stepwise, df_merged_m, "predicted_sales2")
+
+# Plot Actual vs Predicted Values
+ggplot(df_merged_m, aes(x = month)) +
+  geom_line(aes(y = exp(sales_m), color = "Actual Sales"), size = 1) +
+  geom_line(aes(y = exp(predicted_sales0), color = "Model 0"), linetype = "dashed", size = 1) +
+  geom_line(aes(y = exp(predicted_sales1), color = "Model 1"), linetype = "dotted", size = 1) +
+  geom_line(aes(y = exp(predicted_sales2), color = "Model 2 Stepwise"), linetype = "dotdash", size = 1) +
+  labs(title = "Actual vs Predicted Monthly Sales for All Models",
+       x = "Month", y = "Sales", color = "Legend") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+# Models to compare
+models <- list(
+  "Model trend" = ols0,
+  "Model trend + season" = ols1,
+  "Model all covariates step" = ols2_stepwise
+)
+
+# Get R^2 and AIC for each model
+model_stats <- get_model_stats(models)
+
+# View the results
+print(model_stats)
+
+
+# Calculate RMSE for each model
+rmse_stats <- data.frame(
+  Model = character(),
+  RMSE = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (i in seq_along(models)) {
+  model_name <- names(models)[i]
+  predicted_column <- paste0("predicted_sales", i - 1) # Adjust index as per your data
+  rmse <- calculate_rmse(df_merged_m$sales_m, df_merged_m[[predicted_column]])
+  rmse_stats <- rbind(rmse_stats, data.frame(Model = model_name, RMSE = rmse))
+}
+
+# View RMSE statistics
+print(rmse_stats)
+
 ```
 
 ```{r}
-df_merged_m
+# Weekly Models
+head(df_merged_w)
+## Clean Data - Drop rows 1-2 because sales are 0 / was not open yet
+df_merged_w <- df_merged_w %>% slice(-1, -2)
+
+## Model 0A: Trend only
+ols0w <- run_model(sales_w ~ numeric_week, df_merged_w, "Model 0A")
+df_merged_w <- add_predictions(ols0w, df_merged_w, "predicted_sales0")
+
+## Model 1A: Trend + Seasonality
+ols1w <- run_model(sales_w ~ numeric_week + seasonal_month, df_merged_w, "Model 1A")
+df_merged_w <- add_predictions(ols1w, df_merged_w, "predicted_sales1")
+
+
+## Model 2A: Experimentation
+
+
+# Start with the full model (excluding food and bar)
+ols2_full_w <- lm(
+  sales_w ~ numeric_week + seasonal_month + fx_w +
+    google_w + temp_w + rain_w, 
+  data = df_merged_w
+)
+
+
+# Perform backward stepwise regression
+ols2_stepwise_w <- step(
+  ols2_full_w, 
+  direction = "backward",
+  trace = 1 # Prints the stepwise regression process
+)
+
+# Summary of the final stepwise model
+summary(ols2_stepwise_w)
+
+# Add predictions from the final stepwise model
+df_merged_w <- add_predictions(ols2_stepwise_w, df_merged_w, "predicted_sales2")
+
+# Plot Actual vs Predicted Values
+ggplot(df_merged_w, aes(x = week)) +
+  geom_line(aes(y = exp(sales_w), color = "Actual Sales"), size = 1) +
+  geom_line(aes(y = exp(predicted_sales0), color = "Model 0"), linetype = "dashed", size = 1) +
+  geom_line(aes(y = exp(predicted_sales1), color = "Model 1"), linetype = "dotted", size = 1) +
+  geom_line(aes(y = exp(predicted_sales2), color = "Model 2 Stepwise"), linetype = "dotdash", size = 1) +
+  labs(title = "Actual vs Predicted Weekly Sales for All Models",
+       x = "Week", y = "Sales", color = "Legend") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Models to compare
+models_w <- list(
+  "Model trend" = ols0w,
+  "Model trend + season" = ols1w,
+  "Model all covariates step" = ols2_stepwise_w
+)
+
+# Get R^2 and AIC for each model
+model_stats_w <- get_model_stats(models_w)
+
+# View the results
+print(model_stats_w)
+
+
+# Calculate RMSE for each model
+rmse_stats_w <- data.frame(
+  Model = character(),
+  RMSE = numeric(),
+  stringsAsFactors = FALSE
+)
+
+
+for (i in seq_along(models_w)) {
+  model_name <- names(models_w)[i]
+  predicted_column <- paste0("predicted_sales", i - 1) # Adjust index as per your data
+  rmse <- calculate_rmse(df_merged_w$sales_w, df_merged_w[[predicted_column]])
+  rmse_stats_w <- rbind(rmse_stats_w, data.frame(Model = model_name, RMSE = rmse)) # Corrected variable
+}
+
+
+# View RMSE statistics
+print(rmse_stats_w)
+
+```
+
+
+```{r}
+# Daily Models
+head(df_merged_d,25)
+# properly start in december
+df_merged_d <-  df_merged_d %>%
+  filter(date > "2021-11-30")
+head(df_merged_d)
+
+## Model 0: Trend only
+ols0d <- run_model(sales_cop ~ numeric_day, df_merged_d, "Model 0A")
+df_merged_d <- add_predictions(ols0d, df_merged_d, "predicted_sales0")
+
+## Model 1: Trend + Seasonality
+ols1d <- run_model(sales_cop ~ numeric_day + seasonal_month + day_of_week, df_merged_d, "Model 1A")
+df_merged_d <- add_predictions(ols1d, df_merged_d, "predicted_sales1")
+
+# Model 2: Backward
+head(df_merged_d)
+
+# Start with the full model (excluding food and bar)
+ols2_full_d <- lm(
+  sales_cop ~ numeric_day + seasonal_month + day_of_week + fx +
+     tmedian + rain_sum, 
+  data = df_merged_d
+)
+summary(ols2_full_d)
+
+# Perform backward stepwise regression
+ols2_stepwise_d <- step(
+  ols2_full_d, 
+  direction = "backward",
+  trace = 1 # Prints the stepwise regression process
+)
+
+# Summary of the final stepwise model
+summary(ols2_stepwise_d)
+
+# Add predictions from the final stepwise model
+df_merged_d <- add_predictions(ols2_stepwise_d, df_merged_d, "predicted_sales2")
+
+# Plot Actual vs Predicted Values
+ggplot(df_merged_d, aes(x = date)) +
+  geom_line(aes(y = exp(sales_cop), color = "Actual Sales"), size = 1) +
+  geom_line(aes(y = exp(predicted_sales0), color = "Model 0"), linetype = "dashed", size = 1) +
+  geom_line(aes(y = exp(predicted_sales1), color = "Model 1"), linetype = "dotted", size = 1) +
+  geom_line(aes(y = exp(predicted_sales2), color = "Model 2 Stepwise"), linetype = "dotdash", size = 1) +
+  labs(title = "Actual vs Predicted Sales for All Models",
+       x = "date", y = "Sales", color = "Legend") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+# Models to compare
+models_d <- list(
+  "Model trend" = ols0d,
+  "Model trend + season" = ols1d,
+  "Model all covariates step" = ols2_stepwise_d
+)
+
+# Get R^2 and AIC for each model
+model_stats_d <- get_model_stats(models_d)
+
+# View the results
+print(model_stats_d)
+
+# Calculate RMSE for each model on daily data
+rmse_stats_d <- data.frame(
+  Model = character(),
+  RMSE = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (i in seq_along(models_d)) {
+  model_name <- names(models_d)[i]
+  predicted_column <- paste0("predicted_sales", i - 1) # Adjust index as per your data
+  rmse <- calculate_rmse(df_merged_d$sales_cop, df_merged_d[[predicted_column]])
+  rmse_stats_d <- rbind(rmse_stats_d, data.frame(Model = model_name, RMSE = rmse))
+}
+
+# View RMSE statistics for daily data
+print(rmse_stats_d)
+
+```
+## Non Linear Models
+Here we explore non linear models, starting from the simplest to more elaborate models in the end combining some of the used models.
+
+### Wrangle data for models
+The time series are altered so the visualizations are more understandable, basically we change the date index in the timeseries objects
+
+```{r}
+# re-declare time-series beacause we droped some rows:
+# Ensure the 'date' columns are in Date format
+df_merged_d$date <- as.Date(df_merged_d$date)
+df_merged_w$date <- as.Date(df_merged_w$week)
+df_merged_m$date <- as.Date(df_merged_m$month)
+
+# Extract the start date and year for each dataframe
+start_d <- min(df_merged_d$date)
+start_w <- min(df_merged_w$date)
+start_m <- min(df_merged_m$date)
+
+# Extract components for daily, weekly, and monthly start times
+start_d_year <- as.numeric(format(start_d, "%Y"))
+start_d_day <- as.numeric(format(start_d, "%j")) # Day of the year
+
+start_w_year <- as.numeric(format(start_w, "%Y"))
+start_w_week <- as.numeric(format(start_w, "%U")) + 1 # Week number, adding 1 since R starts at week 0
+
+start_m_year <- as.numeric(format(start_m, "%Y"))
+start_m_month <- as.numeric(format(start_m, "%m"))
+
+# Declare time series with appropriate frequencies
+sales_d_ts <- ts(exp(df_merged_d$sales_cop), start = c(start_d_year, start_d_day), frequency = 365)
+sales_w_ts <- ts(exp(df_merged_w$sales_w), start = c(start_w_year, start_w_week), frequency = 52)
+sales_m_ts <- ts(exp(df_merged_m$sales_m), start = c(start_m_year, start_m_month), frequency = 12)
+
+food_d_ts <- ts(exp(df_merged_d$food), start = c(start_d_year, start_d_day), frequency = 365)
+food_w_ts <- ts(exp(df_merged_w$food_w), start = c(start_w_year, start_w_week), frequency = 52)
+food_m_ts <- ts(exp(df_merged_m$food_m), start = c(start_m_year, start_m_month), frequency = 12)
+
+bar_d_ts <- ts(exp(df_merged_d$bar), start = c(start_d_year, start_d_day), frequency = 365)
+bar_w_ts <- ts(exp(df_merged_w$bar_w), start = c(start_w_year, start_w_week), frequency = 52)
+bar_m_ts <- ts(exp(df_merged_m$bar_m), start = c(start_m_year, start_m_month), frequency = 12)
+
+```
+
+```{r}
+# Verify the created time series
+par(mfrow=c(1,1))
+plot(sales_d_ts)
+plot(sales_w_ts)
+plot(sales_m_ts)
+
+
+plot(food_d_ts)
+plot(food_w_ts)
+plot(food_m_ts)
+
+plot(bar_d_ts)
+plot(bar_w_ts)
+plot(bar_m_ts)
+```
+
+Here we fill the sales = 0 values with the mean of the two adjacent dates. This in order to have smoother models.
+The dates with sales = 0 are dates that are national holiday like christmas or new years, or inventory day in which the kitchen cannot operate so the sales are 0.
+```{r}
+# Function to replace 1s with the mean of previous and next observations
+fill_ones <- function(ts_data) {
+  # Convert time series to numeric vector
+  ts_vec <- as.numeric(ts_data)
+  
+  # Loop through and replace 1s
+  for (i in seq_along(ts_vec)) {
+    if (ts_vec[i] == 1) {
+      # Check boundaries to avoid indexing issues
+      prev_val <- ifelse(i > 1, ts_vec[i - 1], NA)
+      next_val <- ifelse(i < length(ts_vec), ts_vec[i + 1], NA)
+      
+      # Replace with mean of previous and next, ignoring NA
+      ts_vec[i] <- mean(c(prev_val, next_val), na.rm = TRUE)
+    }
+  }
+  
+  # Return as time series with original attributes
+  ts(ts_vec, start = start(ts_data), frequency = frequency(ts_data))
+}
+
+# Apply the function 
+sales_d_ts <- fill_ones(sales_d_ts)
+sales_w_ts <- fill_ones(sales_w_ts)
+sales_m_ts <- fill_ones(sales_m_ts)
+
+
+food_d_ts <- fill_ones(food_d_ts)
+food_w_ts <- fill_ones(food_w_ts)
+food_m_ts <- fill_ones(food_m_ts)
+
+bar_d_ts <- fill_ones(bar_d_ts)
+bar_w_ts <- fill_ones(bar_w_ts)
+bar_m_ts <- fill_ones(bar_m_ts)
+
 ```
 
 ### Bass Model
@@ -544,32 +1181,56 @@ plot(cumsum(sales_m_ts)) #Returns a vector whose elements are the cumulative sum
 
 ```{r}
 # Bass model
-bm_monthly_sales <- BM(sales_m_ts)
-summary_bm <- summary(bm_monthly_sales)
+bm_m<-BM(sales_m_ts,display = T) # show graphical view of results / display = True
+
+summary(bm_m)
 ```
 
 ```{r}
-summary_bm 
+bm_m$coefficients['m'] - sum(sales_m_ts)
+```
+According to this, there are only 1m cop left to sell, this is less than a year / seems wrong. Fits well but the 30- onward is wierd + sales might not be declining yet. Still reflects the innovation and copying in some sense
+ 
+Also the restaurants rely in word of mouth to reach full stage
+m = 4.664.000.000 COP, i.e 1 mm EUR approx. / The restaurant has sold 3.515.788.885/ According to this only in 1 year it should extinguish sells p, innovation: 0.832% indicates that the adoption rate due to external influence is relatively low, but not uncommon for many markets. - it is actually relativly innovative q: (8.96%) suggests that imitation plays a larger role than innovation in driving adoption in this market
+
+
+
+```{r}
+pred_bm_m<- predict(bm_m, newx=c(1:length(sales_m_ts)))
+pred_bm_m <- ts(pred_bm_m, start = start(sales_m_ts), frequency = frequency(sales_m_ts))
+pred.inst_bm_m <- make.instantaneous(pred_bm_m)
+pred.inst_bm_m <- ts(pred.inst_bm_m, start = start(sales_m_ts), frequency = frequency(sales_m_ts))
+
+# plot
+plot(sales_m_ts, type = "p", col = "black", pch = 16, cex = 0.7,
+     xlab = "Month", ylab = "Monthly Sales", main = "Actual vs Fitted Sales")
+
+# Add the fitted values as a line
+lines(pred.inst_bm_m, col = "red", lwd = 2)
+
+# Add a legend
+legend("topleft", legend = c("Actual Values", "Fitted Values"),
+       col = c("black", "red"), pch = c(16, NA), lty = c(NA, 1), lwd = c(NA, 2))
 ```
 
 ```{r}
-# prediction (out of sample)
-pred_bm_monthly_sales <- predict(bm_monthly_sales, newx=c(1:50))
-pred.inst_m <- make.instantaneous(pred_bm_monthly_sales)
-
-### plot of fitted model 
-plot(sales_m_ts, 
-     type= "b",
-     xlab="Months", 
-     ylab="Monthly Sales",  
-     pch=16, 
-     lty=3, 
-     xaxt="n", 
-     cex=0.6)
-
-axis(1, at=c(1,10,20,30,35), labels=df_merged_m$month[c(1,10,20,30,35)])
-lines(pred.inst_m, lwd=2, col=2)
+# check residuals
+res_bm_m <- sales_m_ts - pred.inst_bm_m
+tsdisplay(res_bm_m)
 ```
+Residuals have some structure and 2 lag has correlation.
+
+```{r}
+# Calculate RMSE for Bass Model predictions
+rmse_bm_m <- calculate_rmse(observed = sales_m_ts, predicted = pred.inst_bm_m)
+
+# Print the RMSE
+cat("RMSE for Bass Model Predictions:", rmse_bm_m, "\n")
+
+```
+
+
 
 Estimating the model with 50% of the data
 
