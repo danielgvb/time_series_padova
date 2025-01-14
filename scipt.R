@@ -217,16 +217,18 @@ rm(list = setdiff(ls(), objects_to_keep))
 ## 3.1 Sales----------------
 # sales daily
 ggplot(df_merged_d, aes(x=date, y=sales_cop)) +
-  geom_line() + ggtitle("Daily Sales of Restaurant")
+  geom_line() + ggtitle("Daily Sales of Restaurant") +
+  theme(plot.title = element_text(hjust=0.5))
 
 # sales weekly
 ggplot(df_merged_w, aes(x=week, y=sales_w)) +
-  geom_line() + ggtitle("Weekly Sales of Restaurant")
+  geom_line() + ggtitle("Weekly Sales of Restaurant") +
+  theme(plot.title = element_text(hjust=0.5))
 
 # sales montly
 ggplot(df_merged_m, aes(x=month, y=sales_m)) +
-  geom_line() + ggtitle("Monthly Sales of Restaurant")
-
+  geom_line() + ggtitle("Monthly Sales of Restaurant") +
+  theme(plot.title = element_text(hjust=0.5))
 
 ggplot(df_merged_m, aes(x = month)) +
   geom_line(aes(y = sales_m, color = "Sales")) +
@@ -274,7 +276,8 @@ ggplot(df_sales_m_long, aes(x = month, y = Value, fill = Category)) +
   geom_bar(stat = "identity", position = "stack") +
   ggtitle("Monthly Sales of Restaurant") +
   labs(y = "Sales", x = "Month", fill = "Category") +
-  theme_minimal()
+  theme_minimal() +
+  theme(plot.title = element_text(hjust=0.5)) +
 
 # Weekly
 # Reshape the data to a long format
