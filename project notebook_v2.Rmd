@@ -348,15 +348,13 @@ ggplot(df_sales_m_long, aes(x = month, y = Value, fill = Category)) +
   theme_minimal()
 ```
 
+
+
+
+
 ```{r}
 # Weekly
 # Reshape the data to a long format
-df_sales_w_long <- df_merged
-```
-
-
-
-```{r}
 df_sales_w_long <- df_merged_w %>%
   pivot_longer(cols = c(bar_w, food_w), names_to = "Category", values_to = "Value")
 
@@ -2381,104 +2379,90 @@ rmse_exp_sm_d <- rmse_d3
 
 #### Monthly
 ```{r}
-# GGM part
-# Summary of the GGM model
-summary(ggm1)  # Assume ggm1_m is the monthly GGM model
 
-# Predictions using GGM
-pred_GGM_m <- predict(ggm1, newx = matrix(1:length(sales_m_ts), ncol = 1))
-pred_GGM_m.inst <- make.instantaneous(pred_GGM_m)
-```
-```{r}
-# Convert predictions to a time series
-start_time_m <- start(sales_m_ts)  # Start time from sales_m_ts
-frequency_m <- frequency(sales_m_ts)  # Frequency from sales_m_ts
-
-pred_GGM_m_vec <- unlist(pred_GGM_m.inst)  # Convert predictions to a numeric vector
-pred_GGM_m_ts <- ts(pred_GGM_m_vec, start = start_time_m, frequency = frequency_m)
-```
+# 1.  GGM on sales_m_ts
 
 
-```{r}
-# Plot actual vs GGM predictions
-plot(sales_m_ts, type = "b", xlab = "Month", ylab = "Monthly Sales", pch = 16, lty = 3, cex = 0.6)
-lines(pred_GGM_m_ts, col = "red", lty = 2)
-```
-
-```{r}
-#### SARIMAX Refinement------------------------
-
-# Get fitted values from the GGM model
-fit.sales_m <- fitted(ggm1)
-
-# Check length consistency
-if (length(fit.sales_m) != length(sales_m_ts)) {
-  stop("fit.sales_m and sales_m_ts lengths do not match")
-}
-
-```
-
-```{r}
-# Scale GGM fitted values and the cumulative sales
-fit.sales_m <- scale(fit.sales_m)
-sales_m_ts_scaled <- scale(cumsum(sales_m_ts))  # Scale the cumulative sales for convergence
-```
+summary(ggm1)
 
 
-```{r}
-# Fit SARIMAX with GGM fitted values as regressors
-sarima_m <- Arima(
-  sales_m_ts_scaled,
-  order = c(1, 0, 1),
-  seasonal = list(order = c(0, 0, 1), period = 12),  # Monthly seasonality
-  xreg = fit.sales_m
+# 2. Get the instantaneous fitted values of the GGM
+
+fitted_ggm_cum <- fitted(ggm1)
+fitted_ggm_instant <- make.instantaneous(fitted_ggm_cum)
+
+
+# 3. Auto-SARIMAX on cumsum(sales_m_ts), with xreg = instantaneous GGM
+
+# First, create the cumulative sales
+cumulative_sales_m_ts <- cumsum(sales_m_ts)
+
+
+sarima_m <- auto.arima(
+  cumulative_sales_m_ts,
+  xreg         = fitted_ggm_instant,
+  seasonal     = TRUE,
+  stepwise     = FALSE,
+  approximation= FALSE
 )
 
-summary(sarima_m)
-```
 
-```{r}
-# Reverse scaling for fitted cumulative values
-fitted_cumulative <- fitted(sarima_m)
+# 4. Extract the fitted (cumulative) values of the SARIMAX
 
-scaling_center <- attr(sales_m_ts_scaled, "scaled:center")
-scaling_scale <- attr(sales_m_ts_scaled, "scaled:scale")
+fitted_cum_sarima <- fitted(sarima_m)
 
-fitted_cumulative_original <- fitted_cumulative * scaling_scale + scaling_center
 
-# Convert cumulative fitted values to instantaneous values
-fitted_instantaneous <- diff(c(fitted_cumulative_original, NA))  # Add NA to align lengths
 
-# Create a time series object for the fitted instantaneous values
-fitted_instantaneous_ts <- ts(
-  fitted_instantaneous,
+# 5. Convert SARIMAX fitted cumulative back to instantaneous
+# One simple approach:
+fitted_instant_sarima <- diff(c(0, fitted_cum_sarima))
+# Now fitted_instant_sarima should have the same length as sales_m_ts.
+
+# Turn it into a time series object for neat plotting
+fitted_instant_sarima_ts <- ts(
+  fitted_instant_sarima,
   start = start(sales_m_ts),
   frequency = frequency(sales_m_ts)
 )
-```
 
-```{r}
-# Plot actual vs fitted instantaneous values
-plot(sales_m_ts, type = "p", col = "blue", pch = 16,
-     main = "Original vs Fitted Instantaneous Values (Monthly)",
-     xlab = "Time", ylab = "Instantaneous Values")
-lines(fitted_instantaneous_ts, col = "red", lwd = 3, lty = 1)
+# 6. Plot the actual monthly sales and the SARIMAX instantaneous fit
 
-# Add legend
-legend("bottomright", legend = c("Original sales", "Fitted sales"),
-       col = c("blue", "red"), lty = c(NA, 1), pch = c(16, NA), lwd = c(NA, 3))
+plot(
+  sales_m_ts,
+  type="o",
+  col="black",
+  lwd=2,
+  main="Actual Monthly Sales vs. SARIMAX Fitted (Instantaneous)",
+  xlab="Time",
+  ylab="Monthly Sales"
+)
+
+lines(
+  fitted_instant_sarima_ts,
+  col="red",
+  lty=2,
+  lwd=2
+)
+
+legend(
+  "bottomright",
+  legend = c("Actual Sales", "SARIMAX Fit (Instantaneous)"),
+  col    = c("black", "red"),
+  lty    = c(1, 2),
+  lwd    = c(2, 2)
+)
 ```
 
 
 ```{r}
 # Calculate RMSE for fitted_instantaneous_ts against sales_m_ts
-rmse_mixture_m <- calculate_rmse(observed = sales_m_ts, predicted = fitted_instantaneous_ts)
+rmse_mixture_m <- calculate_rmse(observed = sales_m_ts, predicted = fitted_instant_sarima_ts)
 
 # Print the RMSE value
 cat("RMSE for Fitted Instantaneous Values (GGM + SARIMAX):", rmse_mixture_m, "\n")
 ```
 ```{r}
-resid_mixture_m <- sales_m_ts - fitted_instantaneous_ts
+resid_mixture_m <- sales_m_ts - fitted_instant_sarima_ts
 tsdisplay(resid_mixture_m)
 ```
 Residuals have autocorrelation at lag 1
@@ -2486,89 +2470,73 @@ Residuals have autocorrelation at lag 1
 #### Weekly
 
 ```{r}
-#### GGM-------------------------------
+# 1. GGM on sales_w_ts
 
-summary(ggm1_w) # this one is best model found
-
-
-pred_GGM_w<- predict(ggm1_w, newx=matrix(1:length(sales_w_ts), ncol=1))
-pred_GGM_w.inst<- make.instantaneous(pred_GGM_w)
-# set same timeframe for GGM preds
-start_time_w <- start(sales_w_ts)  # Get start time from sales_w_ts
-frequency_w <- frequency(sales_w_ts)  # Get frequency from sales_w_ts
-
-# Convert pred_GGM to a numeric vector
-pred_GGM_w_vec <- unlist(pred_GGM_w.inst)  # Flatten the list to a numeric vector
-# Create the time series for pred_GGM
-pred_GGM_w_ts <- ts(pred_GGM_w_vec, start = start_time_w, frequency = frequency_w)
+summary(ggm1_w)
 
 
-plot(sales_w_ts, type= "b",xlab="Week", ylab="Weekly Sales",  pch=16, lty=3, cex=0.6)
-lines(pred_GGM_w_ts, col = "red", lty = 2)
+# 2. Get the instantaneous fitted values of the GGM
+
+fitted_ggm_cum <- fitted(ggm1_w)                # Cumulative fit from GGM
+fitted_ggm_instant <- make.instantaneous(fitted_ggm_cum)  # Convert to weekly flow
 
 
-```
+# 3. Auto-SARIMAX on cumsum(sales_w_ts), with xreg = instantaneous GGM
 
-```{r}
-# SARMAX refinement
-fit.sales_w <- fitted(ggm1_w)  # Predicted values from the GGM model
+# Create the cumulative weekly series
+cumulative_sales_w_ts <- cumsum(sales_w_ts)
 
-if (length(fit.sales_w) != length(sales_w_ts)) {
-  stop("fit.sales_w and sales_w_ts lengths do not match")
-}
+# Fit an auto.arima with the GGM instantaneous series as xreg
 
-```
-
-```{r}
-fit.sales_w <- scale(fit.sales_w) # scale regresor to make convergence
-
-sales_w_ts_scaled <- scale(cumsum(sales_w_ts))  # Scale the time series because if not will not reach convergence
-
-sarima_w <- Arima(
-  sales_w_ts_scaled, 
-  order = c(1, 0, 1), 
-  seasonal = list(order = c(0, 0, 1), period = 52), 
-  xreg = fit.sales_w # this is the GGM fitted values
+sarima_w <- auto.arima(
+  cumulative_sales_w_ts,
+  xreg         = fitted_ggm_instant,
+  seasonal     = TRUE,
+  stepwise     = FALSE,
+  approximation= FALSE
 )
 
-summary(sarima_w)
+# 4. Extract the fitted (cumulative) values of the SARIMAX
 
-```
-```{r}
-# get fitted values
-# Extract the fitted cumulative values from the SARIMA model
-fitted_cumulative <- fitted(sarima_w)
+fitted_cum_sarima <- fitted(sarima_w)
+# This is the model's in-sample one-step-ahead *cumulative* fit.
 
-# Reverse scaling transformation to get fitted cumulative values in the original scale
-scaling_center <- attr(sales_w_ts_scaled, "scaled:center")
-scaling_scale <- attr(sales_w_ts_scaled, "scaled:scale")
+# 5. Convert SARIMAX fitted cumulative back to instantaneous
 
-fitted_cumulative_original <- fitted_cumulative * scaling_scale + scaling_center
+fitted_instant_sarima <- diff(c(0, fitted_cum_sarima))
 
-# Convert cumulative fitted values to instantaneous values
-fitted_instantaneous <- diff(c(fitted_cumulative_original, NA))  # Add NA to align lengths
-
-# Create a time series object for the fitted instantaneous values
-fitted_instantaneous_ts <- ts(
-  fitted_instantaneous, 
-  start = start(sales_w_ts), 
-  frequency = frequency(sales_w_ts)
+# Turn it into a time series object 
+fitted_instant_sarima_ts <- ts(
+  fitted_instant_sarima,
+  start     = start(sales_w_ts),
+  frequency = frequency(sales_w_ts) 
 )
 
-```
+# 6. Plot the actual weekly sales and the SARIMAX instantaneous fit
+plot(
+  sales_w_ts,
+  type = "o",
+  col  = "black",
+  lwd  = 2,
+  main = "Actual Weekly Sales vs. SARIMAX Fitted (Instantaneous)",
+  xlab = "Time (Weeks)",
+  ylab = "Weekly Sales"
+)
 
-```{r}
-# Plot original instantaneous values vs fitted instantaneous values
-plot(sales_w_ts, type = "p", col = "blue", pch = 16,
-     main = "Original vs Fitted Instantaneous Values",
-     xlab = "Time", ylab = "Instantaneous Values")
+lines(
+  fitted_instant_sarima_ts,
+  col = "red",
+  lty = 2,
+  lwd = 2
+)
 
-# Add the fitted instantaneous values as a line
-lines(fitted_instantaneous_ts, col = "red", lwd = 3, lty = 1)
-
-# Add legend
-legend("bottomright", legend = c("Original Instantaneous", "Fitted Instantaneous"),
-       col = c("blue", "red"), lty = c(NA, 1), pch = c(16, NA), lwd = c(NA, 3))
+legend(
+  "bottomright",
+  legend = c("Actual Weekly Sales", "SARIMAX Fit (Instantaneous)"),
+  col    = c("black", "red"),
+  lty    = c(1, 2),
+  lwd    = c(2, 2)
+)
 
 ```
 
@@ -2606,9 +2574,11 @@ if (ljung_box_test$p.value > 0.05) {
 
 Stationary residuals but with significant correlation
 
+
+
 ```{r}
 #### RMSE for SARIMAX Predictions ####
-rmse_mixture_w <- calculate_rmse(observed = sales_w_ts, predicted = fitted_instantaneous_ts)
+rmse_mixture_w <- calculate_rmse(observed = sales_w_ts, predicted = fitted_instant_sarima_ts)
 
 # Print RMSE for SARIMAX
 cat("RMSE for SARIMAX Predictions:", rmse_mixture_w, "\n")
@@ -2616,75 +2586,85 @@ cat("RMSE for SARIMAX Predictions:", rmse_mixture_w, "\n")
 #### Daily
 
 ```{r}
-# Scaling the sales data
-sales_min <- min(sales_d_ts)
-sales_max <- max(sales_d_ts)
-sales_scaled <- (sales_d_ts - sales_min) / (sales_max - sales_min)
+# 1. GGM on sales_d_ts
 
-# View scaled data
-summary(sales_scaled)
-plot(sales_scaled, type = "l", main = "Scaled Daily Sales", xlab = "Day", ylab = "Scaled Sales")
-
-#### GGM-------------------------------
-# Fit GGM model using scaled data
-ggm1_d <- GGM(sales_scaled, mt = 'base', display = T)
 summary(ggm1_d)
 
-# Predictions using GGM
-pred_GGM_d <- predict(ggm1_d, newx = matrix(1:length(sales_scaled), ncol = 1))
-pred_GGM_d.inst <- make.instantaneous(pred_GGM_d)
+# 2. Get the instantaneous fitted values of the GGM
 
-# Convert predictions to a time series
-start_time_d <- start(sales_scaled)  # Start time from scaled sales
-frequency_d <- frequency(sales_scaled)  # Frequency from scaled sales
+fitted_ggm_cum <- fitted(ggm1_d)                 # Cumulative fit from GGM
+fitted_ggm_instant <- make.instantaneous(fitted_ggm_cum)  # Convert to daily flow
 
-pred_GGM_d_vec <- unlist(pred_GGM_d.inst)  # Convert predictions to a numeric vector
-pred_GGM_d_ts <- ts(pred_GGM_d_vec, start = start_time_d, frequency = frequency_d)
+# 3. Auto-SARIMAX on cumsum(sales_d_ts), with xreg = instantaneous GGM
 
-# Plot scaled GGM predictions
-plot(sales_scaled, type = "b", xlab = "Day", ylab = "Scaled Daily Sales", pch = 16, lty = 3, cex = 0.6)
-lines(pred_GGM_d_ts, col = "red", lty = 2)
+# Create the cumulative daily series
+cumulative_sales_d_ts <- cumsum(sales_d_ts)
 
-#### SARIMAX Refinement------------------------
 
-# Use instantaneous fitted values from the GGM model
-fit.sales_d_instantaneous <- pred_GGM_d.inst
+# first scale data so it can converge
 
-# Ensure lengths match
-if (length(fit.sales_d_instantaneous) != length(sales_scaled)) {
-  stop("Instantaneous fitted values and scaled sales data lengths do not match!")
-}
+cumulative_sales_d_ts <- scale(cumulative_sales_d_ts)
+fitted_ggm_instant <- scale(fitted_ggm_instant)
 
-# Fit SARIMAX with instantaneous GGM fitted values as regressors
+# Scale the data
+cumulative_sales_center <- attr(cumulative_sales_d_ts, "scaled:center")
+cumulative_sales_scale <- attr(cumulative_sales_d_ts, "scaled:scale")
+ggm_instant_center <- attr(fitted_ggm_instant, "scaled:center")
+ggm_instant_scale <- attr(fitted_ggm_instant, "scaled:scale")
+
+
 sarima_d <- auto.arima(
-  sales_scaled,
-  seasonal = TRUE,                 # Enable seasonal components
-  xreg = fit.sales_d_instantaneous, # Use instantaneous GGM values as regressors
-  stepwise = TRUE,                 # Enable stepwise selection (faster)
-  approximation = FALSE            # Use exact maximum likelihood
+  cumulative_sales_d_ts,
+  xreg = fitted_ggm_instant,
+  stepwise = TRUE,
+  approximation = TRUE
 )
 
-summary(sarima_d)
 
-# Extract fitted scaled values from the SARIMAX model
-fitted_scaled <- fitted(sarima_d)
 
-# Reverse scaling for final fitted instantaneous values
-fitted_instantaneous_ts <- fitted_scaled * (sales_max - sales_min) + sales_min
+# 4. Extract the fitted (cumulative) values of the SARIMAX
 
-# Reverse scaling for GGM predictions
-pred_GGM_d_original <- pred_GGM_d_ts * (sales_max - sales_min) + sales_min
+# Fitted cumulative values (scaled)
+fitted_cum_sarima <- fitted(sarima_d)
 
-# Plot actual vs fitted instantaneous values
-plot(sales_d_ts, type = "p", col = "blue", pch = 16,
-     main = "Original vs Fitted Instantaneous Values (Daily)",
-     xlab = "Time", ylab = "Instantaneous Values")
-lines(fitted_instantaneous_ts, col = "red", lwd = 3, lty = 1)
+# Scale back to original cumulative values
+fitted_cum_sarima_original <- fitted_cum_sarima * cumulative_sales_scale + cumulative_sales_center
 
-# Add legend
-legend("topright", legend = c("Original Instantaneous", "Fitted Instantaneous"),
-       col = c("blue", "red"), lty = c(NA, 1), pch = c(16, NA), lwd = c(NA, 3))
+# Convert cumulative fitted to instantaneous fitted (original units)
+fitted_instant_sarima_original <- diff(c(0, fitted_cum_sarima_original))
 
+# Create time series object for instantaneous fitted values
+fitted_instant_sarima_original_ts <- ts(
+  fitted_instant_sarima_original,
+  start = start(sales_d_ts),
+  frequency = frequency(sales_d_ts)
+)
+
+# Plot the results
+plot(
+  sales_d_ts,
+  type = "o",
+  col  = "black",
+  lwd  = 2,
+  main = "Actual Daily Sales vs. SARIMAX Fitted (Instantaneous)",
+  xlab = "Time (Days)",
+  ylab = "Daily Sales"
+)
+
+lines(
+  fitted_instant_sarima_original_ts,
+  col = "red",
+  lty = 2,
+  lwd = 2
+)
+
+legend(
+  "bottomright",
+  legend = c("Actual Daily Sales", "SARIMAX Fit (Instantaneous)"),
+  col    = c("black", "red"),
+  lty    = c(1, 2),
+  lwd    = c(2, 2)
+)
 ```
 
 ```{r}
@@ -2719,7 +2699,7 @@ if (ljung_box_test$p.value > 0.05) {
 
 ```{r}
 #### RMSE for SARIMAX Predictions ####
-rmse_mixture_d <- calculate_rmse(observed = sales_d_ts, predicted = fitted_instantaneous_ts)
+rmse_mixture_d <- calculate_rmse(observed = sales_d_ts, predicted = fitted_instant_sarima_original_ts)
 
 # Print RMSE for SARIMAX
 cat("RMSE for SARIMAX Predictions:", rmse_mixture_d, "\n")
@@ -2765,7 +2745,7 @@ ideally YYYY-MM-DD for a date or YYYY-MM-DD HH:MM:SS for a timestamp**.
 The y column [must]{.underline} be numeric, and represents the
 measurement we wish to forecast.
 
-#### Monthly sales
+#### Monthly
 
 ```{r}
 # sales montly
@@ -2863,7 +2843,7 @@ if (ljung_box_test$p.value > 0.05) {
 ```
 
 
-#### Weekly sales
+#### Weekly
 
 ```{r}
 ggplot(df_merged_w, aes(x=week, y=sales_w)) +
@@ -2973,7 +2953,7 @@ if (ljung_box_test_w$p.value > 0.05) {
 
 ```
 
-#### Daily Sales
+#### Daily
 
 ```{r}
 head(sales_d_ts)
@@ -3001,7 +2981,7 @@ prophet_sales_d <- prophet(df_prophet_d)
 
 ```{r}
 future_sales_d <- make_future_dataframe(prophet_sales_d,
-                                        periods = 60,
+                                        periods = 120,
                                         freq = 'day',
                                         include_history = T)
 tail(future_sales_d)
@@ -3152,8 +3132,8 @@ print(rmse_table)
 
 Best models are:
 
-* Monthly: GGM + SARIMA
-* Weekly: GGM + SARIMA
+* Monthly: GGM 
+* Weekly: Prophet
 * Daily: Prophet
 
 ## Evaluation of best models on Test Set
@@ -3183,17 +3163,216 @@ head(df_sales_w_test)
 ```
 ## Forecast vs Actual
 ### Montly
+
+
+#### GGM
 ```{r}
+# Length of historical data
+N <- length(sales_m_ts)
+
+# Time index for the next 38 periods
+future_times <- matrix((N + 1):(N + 38), ncol = 1)
+
+# Predict cumulative sales for the next 38 periods
+ggm_future_cum <- predict(ggm1, newx = future_times)
+# Convert cumulative sales forecast to instantaneous sales
+ggm_future_inst <- make.instantaneous(ggm_future_cum)[-1]
+
+```
+
+```{r}
+# Get the end time of sales_m_ts
+end_time <- tsp(sales_m_ts)[2]  # End time of original series
+
+# Start the forecast at the next period
+forecast_start <- end_time + 1 / frequency(sales_m_ts)
+
+# Create a time series object for the forecast
+ggm_future_inst_ts <- ts(
+  ggm_future_inst,
+  start = forecast_start,
+  frequency = frequency(sales_m_ts)
+)
+
+# Step 5: Plot the forecast with aligned index
+plot(
+  sales_m_ts,
+  type = "o",
+  col = "black",
+  lwd = 2,
+  main = "Original, Fitted, and Forecasted Instantaneous Sales",
+  xlab = "Time",
+  ylab = "Monthly Sales",
+  xlim = c(start(sales_m_ts)[1], forecast_start + 38 / frequency(sales_m_ts))
+)
+
+lines(
+  pred.inst_ggm_m,
+  col = "red",
+  lty = 2,
+  lwd = 2
+)
+
+lines(
+  ggm_future_inst_ts,
+  col = "blue",
+  lty = 2,
+  lwd = 2
+)
+
+legend(
+  "bottomright",
+  legend = c("Original Sales", "Fitted Values", "Forecast"),
+  col = c("black", "red", "blue"),
+  lty = c(1, 2, 2),
+  lwd = c(2, 2, 2)
+)
+```
+The forecast of the GGM looks like the restaurant is loosing grip, actually restaurants can do well for way longer than the estimated period by the GGM. So we take this as a downside scenario forecast.
+But lets try to forecast a baseline scenario, with the second best model: the Holt-Winters.
+
+#### Holt-Winters: Multiplicative
+
+```{r}
+
+# Step 1: Re-Fit the Holt-Winters model
+hw2_m <- hw(sales_m_ts, seasonal = "multiplicative")
+
+# Step 2: Generate the forecast for the next 24 months
+forecast_hw <- forecast(hw2_m, h = 24)
+
+# Step 3: Use autoplot to plot the original values and the forecast
+autoplot(forecast_hw) +
+  ggtitle("Holt-Winters Forecast and Original Sales") +
+  xlab("Time") +
+  ylab("Monthly Sales") +
+  theme_minimal()
 ```
 ```{r}
-cumsum(sales_m_ts)
-forecast_cumulative
+# Compare actual vs forecasted
+actual_sales_m <- df_sales_m_test$sales_m
+forecasted_hw <- forecast_hw$mean[1:2]
+forecasted_ggm <- ggm_future_inst_ts[1:2]
+rmse_test_hw <-calculate_rmse(actual_sales_m, forecasted_hw)
+rmse_test_ggm <- calculate_rmse(actual_sales_m, forecasted_ggm)
+cat("Error Holt-Winters:", rmse_test_hw, "\n")
+cat("Error GGM:", rmse_test_ggm, "\n")
 ```
+The GGM error is lower, we can do a combination (smoothing) of both scenarios for the final forecast
+
+```{r}
+# Combine the actual and forecasted data into a data frame
+plot_data <- data.frame(
+  Period = c("Last Period 1", "Last Period 2"),
+  Actual = actual_sales_m,
+  HoltWinters = forecasted_hw,
+  GGM = forecasted_ggm
+)
+
+plot_data_melt <- melt(plot_data, id.vars = "Period", variable.name = "Type", value.name = "Sales")
+
+# Create a plot
+ggplot(plot_data_melt, aes(x = Period, y = Sales, fill = Type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Actual vs Forecasted Sales",
+       x = "Period",
+       y = "Sales",
+       fill = "Type") +
+  theme_minimal()
+
+```
+
 
 ### Weekly
-### Daily
+#### Prophet
 
+```{r}
+# Filter forecast for November and December 2024
+forecast_nov_dec_w <- forecast_sales_w %>%
+  filter(ds >= as.Date("2024-11-01") & ds <= as.Date("2025-01-05"))
+```
+
+```{r}
+# Plot the actual sales with black dots
+plot(as.Date(df_sales_w_test$week), df_sales_w_test$sales_w,
+     type = "p",                             # Points for actual sales
+     pch = 16,                               # Solid circles
+     col = "black",                          # Black color for points
+     xlab = "Date",                          # X-axis label
+     ylab = "Sales",                         # Y-axis label
+     main = "Actual Sales vs Forecasted Sales (Nov-Dec 2024)")  # Title
+
+# Add the forecast line in red
+lines(as.Date(forecast_nov_dec_w$ds), forecast_nov_dec_w$yhat,
+      col = "red",                          # Red color for the line
+      lwd = 2)                              # Wider line
+
+# Add a legend in the top right
+legend("topright",
+       legend = c("Actual Sales", "Forecasted Sales"),
+       col = c("black", "red"),             # Colors matching the plot
+       pch = c(16, NA),                     # Solid dot for actual sales, none for line
+       lty = c(NA, 1),                      # Line for forecasted sales, none for dot
+       lwd = c(NA, 2))                      # Line width for the forecast
+
+```
+
+### Daily
+#### Prophet
+```{r}
+# Filter forecast for November and December 2024
+forecast_nov_dec_d <- forecast_sales_d %>%
+  filter(ds >= as.Date("2024-11-01") & ds <= as.Date("2025-01-05"))
+
+# Plot the actual sales with black dots
+plot(as.Date(test_sales_df$date), test_sales_df$sales_cop,
+     type = "p",                             # Points for actual sales
+     pch = 16,                               # Solid circles
+     col = "black",                          # Black color for points
+     xlab = "Date",                          # X-axis label
+     ylab = "Sales",                         # Y-axis label
+     main = "Actual Sales vs Forecasted Sales (Nov-Dec 2024)")  # Title
+
+# Add the forecast line in red
+lines(as.Date(forecast_nov_dec_d$ds), forecast_nov_dec_d$yhat,
+      col = "red",                          # Red color for the line
+      lwd = 2)                              # Wider line
+
+# Add a legend in the top right
+legend("topright",
+       legend = c("Actual Sales", "Forecasted Sales"),
+       col = c("black", "red"),             # Colors matching the plot
+       pch = c(16, NA),                     # Solid dot for actual sales, none for line
+       lty = c(NA, 1),                      # Line for forecasted sales, none for dot
+       lwd = c(NA, 2))                      # Line width for the forecast
+
+```
 ## Forecast with Best Models
+Finally, we want to use the long term forecast, so we can use the monthly combination of models for that.
 ### Montly
-### Weekly
-### Daily
+```{r}
+long_term_forecasted_hw <- forecast_hw$mean
+long_term_forecasted_ggm <- ggm_future_inst_ts
+```
+```{r}
+# Define the date ranges for both series
+dates_hw <- seq(as.Date("2024-11-01"), as.Date("2026-10-01"), by = "month")
+dates_ggm <- seq(as.Date("2024-11-01"), as.Date("2027-11-01"), by = "month")
+
+# Create data frames for the two series
+df_hw <- data.frame(Date = dates_hw, Value = long_term_forecasted_hw)
+df_ggm <- data.frame(Date = dates_ggm, Value = long_term_forecasted_ggm)
+
+# Merge the two series on the common dates
+df_merged <- merge(df_hw, df_ggm, by = "Date", suffixes = c("_hw", "_ggm"))
+
+# Calculate the mean of both series where data is available
+df_merged$Mean <- rowMeans(df_merged[, c("Value_hw", "Value_ggm")], na.rm = TRUE)
+
+# Create the new time series
+long_term_forecast <- data.frame(Date = df_merged$Date, Mean = df_merged$Mean)
+plot(long_term_forecast)
+```
+
+
+
