@@ -1477,17 +1477,156 @@ Box.test(res_GGM_f_d, lag = 10, type = "Ljung-Box") # h0 res indep
 # p-val < alpha =>  reject h0, so residuals are NOT indep
 
 
-## 6.1.3 Holt-Winters---------------------
+## 6.1.4 GGM BAR-------------
+# Runs on DIMORA
+# documentation: https://cran.rstudio.com/web/packages/DIMORA/DIMORA.pdf
+# bass model preliminary m, p, q for algorithm
+
+# mt argument is the determination of market potential
+### Monthly----------------------------------
+ggm1_bar_m <- GGM(bar_m_ts, mt = 'base', display = T)
+ggm2_bar_m <- GGM(bar_m_ts, mt = function(x) pchisq(x, 10), display = T)
+summary(ggm1_bar_m)
+summary(ggm2_bar_m)
+# Try different functions for market potential
+
+ggm3_bar_m <- GGM(bar_m_ts, mt = function(x) log(x), display = T)
+ggm4_bar_m <- GGM(bar_m_ts, mt = function(x) (x)^(1 / 1.05), display = T)
+summary(ggm3_bar_m)
+summary(ggm4_bar_m)
+
+# Predictions
+pred_GGM_bar_m <- predict(ggm1_bar_m, newx = c(1:length(bar_m_ts)))
+pred_GGM_bar_m <- ts(pred_GGM_bar_m, start = start(bar_m_ts), frequency = frequency(bar_m_ts))
+pred_GGM_bar_m.inst <- make.instantaneous(pred_GGM_bar_m)
+pred_GGM_bar_m.inst <- ts(pred_GGM_bar_m.inst, start = start(bar_m_ts), frequency = frequency(bar_m_ts))
+
+# Plot
+plot(bar_m_ts, type = "p", col = "black", pch = 16, cex = 0.7,
+     xlab = "Month", ylab = "Monthly Sales", main = "Actual vs Fitted Sales (Bar)")
+
+# Add the fitted values as a line
+lines(pred_GGM_bar_m.inst, col = "red", lwd = 2)
+
+# Add a legend
+legend("topleft", legend = c("Actual Values", "Fitted Values"),
+       col = c("black", "red"), pch = c(16, NA), lty = c(NA, 1), lwd = c(NA, 2))
+
+# Analysis of residuals
+res_GGM_bar_m <- bar_m_ts - pred_GGM_bar_m.inst
+tsdisplay(res_GGM_bar_m)
+
+# Check for stationarity of residuals
+adf_test_bar_m <- adf.test(res_GGM_bar_m)
+print(adf_test_bar_m) # If p-val < alpha, series stationary
+
+# Check for autocorrelation in residuals
+Box.test(res_GGM_bar_m, lag = 10, type = "Ljung-Box") # h0 res indep
+
+
+### Weekly----------------------------------
+ggm1_bar_w <- GGM(bar_w_ts, mt = 'base', display = T)
+ggm2_bar_w <- GGM(bar_w_ts, mt = function(x) pchisq(x, 25), display = T)
+summary(ggm1_bar_w) # This one is better
+summary(ggm2_bar_w)
+# Try different functions for market potential
+
+ggm3_bar_w <- GGM(bar_w_ts, mt = function(x) log(x), display = T)
+ggm4_bar_w <- GGM(bar_w_ts, mt = function(x) (x)^(1 / 1.05), display = T)
+
+summary(ggm3_bar_w)
+summary(ggm4_bar_w) # Better shaped but less significant
+
+# Predictions
+pred_GGM_bar_w <- predict(ggm4_bar_w, newx = c(1:length(bar_w_ts)))
+pred_GGM_bar_w <- ts(pred_GGM_bar_w, start = start(bar_w_ts), frequency = frequency(bar_w_ts))
+pred_GGM_bar_w.inst <- make.instantaneous(pred_GGM_bar_w)
+pred_GGM_bar_w.inst <- ts(pred_GGM_bar_w.inst, start = start(bar_w_ts), frequency = frequency(bar_w_ts))
+
+# Plot
+plot(bar_w_ts, type = "p", col = "black", pch = 16, cex = 0.7,
+     xlab = "Month", ylab = "Weekly Sales", main = "Actual vs Fitted Sales (Bar)")
+
+# Add the fitted values as a line
+lines(pred_GGM_bar_w.inst, col = "red", lwd = 2)
+
+# Add a legend
+legend("topleft", legend = c("Actual Values", "Fitted Values"),
+       col = c("black", "red"), pch = c(16, NA), lty = c(NA, 1), lwd = c(NA, 2))
+
+# Analysis of residuals
+res_GGM_bar_w <- bar_w_ts - pred_GGM_bar_w.inst
+tsdisplay(res_GGM_bar_w)
+# autocorrelation present
+
+# Check for stationarity of residuals
+adf_test_bar_w <- adf.test(res_GGM_bar_w)
+print(adf_test_bar_w)
+# not stationary, pval > alpha
+
+# Check for autocorrelation in residuals
+Box.test(res_GGM_bar_w, lag = 10, type = "Ljung-Box") # h0 res indep
+# autocorrelation because pval < alpha (h0 no autocorrel, reject h0)
+
+### Daily----------------------------------
+ggm1_bar_d <- GGM(bar_d_ts, mt = 'base', display = T)
+ggm2_bar_d <- GGM(bar_d_ts, mt = function(x) pchisq(x, 10), display = T)
+summary(ggm1_bar_d) # This one is better looking / pc, qc non significant
+summary(ggm2_bar_d)
+# Try different functions for market potential
+
+ggm3_bar_d <- GGM(bar_d_ts, mt = function(x) log(x), display = T)
+ggm4_bar_d <- GGM(bar_d_ts, mt = function(x) (x)^(1 / 1.05), display = T)
+
+summary(ggm3_bar_d)
+summary(ggm1_bar_d)
+summary(ggm4_bar_d)
+# best model is the base one
+
+# Predictions
+pred_GGM_bar_d <- predict(ggm1_bar_d, newx = c(1:length(bar_d_ts)))
+pred_GGM_bar_d <- ts(pred_GGM_bar_d, start = start(bar_d_ts), frequency = frequency(bar_d_ts))
+pred_GGM_bar_d.inst <- make.instantaneous(pred_GGM_bar_d)
+pred_GGM_bar_d.inst <- ts(pred_GGM_bar_d.inst, start = start(bar_d_ts), frequency = frequency(bar_d_ts))
+
+# Plot
+plot(bar_d_ts, type = "p", col = "black", pch = 16, cex = 0.7,
+     xlab = "Month", ylab = "Daily Sales", main = "Actual vs Fitted Sales (Bar)")
+
+# Add the fitted values as a line
+lines(pred_GGM_bar_d.inst, col = "red", lwd = 2)
+
+# Add a legend
+legend("topleft", legend = c("Actual Values", "Fitted Values"),
+       col = c("black", "red"), pch = c(16, NA), lty = c(NA, 1), lwd = c(NA, 2))
+
+# Analysis of residuals
+res_GGM_bar_d <- bar_d_ts - pred_GGM_bar_d.inst
+tsdisplay(res_GGM_bar_d)
+# serial autocorrel
+
+# Check for stationarity of residuals
+adf_test_bar_d <- adf.test(res_GGM_bar_d)
+print(adf_test_bar_d)
+# reject non stationarity: is stationary
+
+# Check for autocorrelation in residuals
+Box.test(res_GGM_bar_d, lag = 10, type = "Ljung-Box") # h0 res indep
+# reject indep, there is correl
+
+
+## 6.1.5 Holt-Winters FOOD---------------------
 library(forecast)
 # We try this model because fits trend and seasonality in a smooth way
 #### Monthly------------------------------
-autoplot(sales_m_ts)
+autoplot(food_m_ts)
+time(food_m_ts)
 
 # adjust timeseries:
-sales_m_ts <- ts(sales_m_ts, frequency=12, start=c(2021, 11))
+food_m_ts <- ts(food_m_ts, frequency=12, start=c(2021, 11))
 
-hw1_m<- hw(sales_m_ts, seasonal="additive")
-hw2_m<- hw(sales_m_ts, seasonal="multiplicative")
+hw1_m<- hw(food_m_ts, seasonal="additive")
+hw2_m<- hw(food_m_ts, seasonal="multiplicative")
 
 # prediction
 fitted_hw1 <- hw1_m$fitted
@@ -1497,8 +1636,8 @@ fitted_hw2 <- hw2_m$fitted
 
 # Create a data frame for ggplot
 plot_data <- data.frame(
-  Time = time(sales_m_ts),
-  Actual = as.numeric(sales_m_ts),
+  Time = time(food_m_ts),
+  Actual = as.numeric(food_m_ts),
   Fitted_Additive = as.numeric(hw1_m$fitted),
   Fitted_Multiplicative = as.numeric(hw2_m$fitted)
 )
@@ -1567,7 +1706,7 @@ forecast_hw2 <- forecast(hw2_m, h=12)
 
 # Forecast plot
 # Plot the time series with both forecasts
-autoplot(sales_m_ts) +
+autoplot(food_m_ts) +
   autolayer(forecast_hw1$mean, series="Additive Holt-Winters Forecast", PI=F) +
   autolayer(forecast_hw2$mean, series="Multiplicative Holt-Winters Forecast", PI=F) +
   ggtitle("Sales Forecast with Holt-Winters Models") +
@@ -1581,58 +1720,130 @@ autoplot(sales_m_ts) +
   theme(legend.position = "top", legend.title = element_blank())
 
 # autoplot
-autoplot(sales_m_ts)+
+autoplot(food_m_ts)+
   autolayer(hw2_m, series="Holt-Winters' method", PI=F)
 
+## 6.1.6 Holt-Winters BAR---------------------
 
-#### Weekly------------------------------
-tsdisplay(sales_m_ts)
-autoplot(sales_w_ts)
-head(df_merged_w)
-head(sales_w_ts)
-# adjust timeseries:
-sales_w_ts <- ts(sales_w_ts, frequency=52, start=c(2021, 10,31))
+#### Monthly------------------------------
+autoplot(bar_m_ts)
+time(bar_m_ts)
 
-# experiment to evaluate max frequency of holt winters method in R
-# Find the grouping factor for 24 periods in a year (every 2.1667 weeks per period)
-weeks_per_period <- 52 / 24
-group <- floor((seq_along(sales_w_ts) - 1) / weeks_per_period)
+# Adjust timeseries:
+bar_m_ts <- ts(bar_m_ts, frequency = 12, start = c(2021, 11))
 
-# Aggregate by summing (or averaging)
-sales_bimonthly <- tapply(sales_w_ts, group, sum)
+# Fit Holt-Winters models for bar data
+hw1_b_m <- hw(bar_m_ts, seasonal = "additive")
+hw2_b_m <- hw(bar_m_ts, seasonal = "multiplicative")
 
-# Create a new time series with frequency 24
-sales_bimonthly_ts <- ts(sales_bimonthly, frequency=24, start=c(2021, 10))
+# Predictions
+fitted_hw1_b_m <- hw1_b_m$fitted
+fitted_hw2_b_m <- hw2_b_m$fitted
 
-autoplot(sales_w_ts)
-autoplot(sales_bimonthly_ts)
+# Plot
 
-#hw1_w<- hw(sales_bw_ts, seasonal="additive") # does not work
-#hw2_w<- hw(sales_w_ts, seasonal="multiplicative")
-hw2_w<- hw(sales_bimonthly_ts, seasonal="multiplicative") # Works
-# Since we are particularly interested in weekly ts, 
-# we dont continue with HW
-autoplot(sales_bimonthly_ts)+
-  autolayer(hw2_w, series="Holt-Winters' method", PI=F)
+# Create a data frame for ggplot
+plot_data_b <- data.frame(
+  Time = time(bar_m_ts),
+  Actual = as.numeric(bar_m_ts),
+  Fitted_Additive = as.numeric(hw1_b_m$fitted),
+  Fitted_Multiplicative = as.numeric(hw2_b_m$fitted)
+)
+
+# Melt data for easier ggplot usage
+plot_data_b_melted <- melt(plot_data_b, id.vars = "Time", 
+                           variable.name = "Series", 
+                           value.name = "Value")
+
+# Plot using ggplot2
+ggplot(plot_data_b_melted, aes(x = Time, y = Value, color = Series)) +
+  geom_point(data = subset(plot_data_b_melted, Series == "Actual"), size = 2) + # Actual values as dots
+  geom_line(data = subset(plot_data_b_melted, Series != "Actual"), size = 1) +  # Fitted values as lines
+  labs(
+    title = "Actual vs Fitted Values (Bar)",
+    x = "Time",
+    y = "Value",
+    color = "Series"
+  ) +
+  scale_color_manual(
+    values = c("Actual" = "black", "Fitted_Additive" = "blue", "Fitted_Multiplicative" = "red"),
+    labels = c("Actual", "Fitted (Additive)", "Fitted (Multiplicative)")
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    legend.title = element_text(face = "bold")
+  )
+
+# Residuals
+residuals_hw1_b_m <- residuals(hw1_b_m)  
+residuals_hw2_b_m <- residuals(hw2_b_m)  
+tsdisplay(residuals_hw1_b_m, main = "Residuals: Additive Holt-Winters (Bar)")
+tsdisplay(residuals_hw2_b_m, main = "Residuals: Multiplicative Holt-Winters (Bar)")
+
+# Stationarity and Correlation
+# Check for stationarity of residuals
+# Additive
+adf_test_hw1_b_m <- adf.test(residuals_hw1_b_m) # H0: series is non-stationary
+print(adf_test_hw1_b_m) # If p-val < alpha, series is stationary
+
+# Multiplicative
+adf_test_hw2_b_m <- adf.test(residuals_hw2_b_m) # H0: series is non-stationary
+print(adf_test_hw2_b_m) # If p-val < alpha, series is stationary
+
+# Check for autocorrelation in residuals
+# Additive
+Box.test(residuals_hw1_b_m, lag = 10, type = "Ljung-Box") # H0: residuals are independent
+# Multiplicative
+Box.test(residuals_hw2_b_m, lag = 10, type = "Ljung-Box") # H0: residuals are independent
+
+# Multiplicative model seems to follow the data better, 
+# and residuals are slightly better
+
+# Forecast
+# Save the forecast of the two models
+forecast_hw1_b_m <- forecast(hw1_b_m, h = 12)
+forecast_hw2_b_m <- forecast(hw2_b_m, h = 12)
+
+# Forecast plot
+# Plot the time series with both forecasts
+autoplot(bar_m_ts) +
+  autolayer(forecast_hw1_b_m$mean, series = "Additive Holt-Winters Forecast (Bar)", PI = F) +
+  autolayer(forecast_hw2_b_m$mean, series = "Multiplicative Holt-Winters Forecast (Bar)", PI = F) +
+  ggtitle("Sales Forecast with Holt-Winters Models (Bar)") +
+  xlab("Time") +
+  ylab("Sales") +
+  scale_color_manual(
+    values = c("Additive Holt-Winters Forecast (Bar)" = "blue",
+               "Multiplicative Holt-Winters Forecast (Bar)" = "red")
+  ) +
+  theme_minimal() +
+  theme(legend.position = "top", legend.title = element_blank())
+
+# Autoplot
+autoplot(bar_m_ts) +
+  autolayer(hw2_b_m, series = "Holt-Winters' Method (Multiplicative, Bar)", PI = F)
+
+
 
 # 7. ARIMA Models----------------------------
-## 7.1 Standard ARIMA---------------------------------
+## 7.1 Standard ARIMA FOOD---------------------------------
 ## Montly------------------
-
-plot(sales_m_ts)
+library(forecast)
+plot(food_m_ts)
 # see if series is stationary
-adf.test(sales_m_ts) #H0, series is non-stationary
+adf.test(food_m_ts) #H0, series is non-stationary
 # p-val > 0.05 => dont reject, non stationary: series is not stationary
-adf.test(diff(sales_m_ts)) #H0, series is non-stationary
+adf.test(diff(food_m_ts)) #H0, series is non-stationary
 
 # see the acf and pacf
-tsdisplay(diff(sales_m_ts))
+tsdisplay(diff(food_m_ts)) 
 # PACF suggest AR-1 ?
 # ACF suggests MA-1 ?
 
 ### Manual ARIMA------------
 # ARIMA(p,d,q) = (1,1,0)
-arima1_m<- Arima(sales_m_ts, order=c(1,1,0))
+arima1_m<- Arima(food_m_ts, order=c(1,1,0))
 summary(arima1_m)
 
 # study residual to see if is a good model
@@ -1642,7 +1853,7 @@ tsdisplay(resid1_m)
 # Residuals seem stationary
 
 ### Auto-ARIMA------------
-arima2_m <- auto.arima(sales_m_ts)
+arima2_m <- auto.arima(food_m_ts)
 
 summary(arima2_m)
 summary(arima1_m)
@@ -1654,18 +1865,19 @@ tsdisplay(resid2_m)
 
 ## Weekly------------------
 # see if series is stationary
-adf.test(sales_w_ts) #H0, series is non-stationary
+adf.test(food_w_ts) #H0, series is non-stationary
 # p-val > 0.05 => dont reject, non stationary: series is not stationary
-adf.test(diff(sales_w_ts)) # after diff is sationary
+adf.test(diff(food_w_ts)) # after diff is sationary
+# series is stationary
 
 # see the acf and pacf
-tsdisplay(diff(sales_w_ts))
+tsdisplay(diff(food_w_ts))
 # PACF suggest AR-1
-#ACF suggest MA-1
+#ACF suggest ARIMA 1,1,1
 
 ### Manual ARIMA------------
-# ARIMA(p,d,q) = (1,1,0)
-arima1_w<- Arima(sales_w_ts, order=c(1,1,0))
+# ARIMA(p,d,q) = (1,1,1)
+arima1_w<- Arima(food_w_ts, order=c(1,1,1))
 summary(arima1_w)
 
 # study residual to see if is a good model
@@ -1675,11 +1887,11 @@ tsdisplay(resid1_w)
 # Residuals seem stationary
 
 ### Auto-ARIMA------------
-arima2_w <- auto.arima(sales_w_ts)
+arima2_w <- auto.arima(food_w_ts)
 
 summary(arima2_w)
 summary(arima1_w)
-# Autoarima is better
+# Autoarima is better sigthly
 
 # study residual to see if is a good model
 resid2_w<- residuals(arima2_w)
@@ -1687,20 +1899,21 @@ tsdisplay(resid2_w)
 
 ## Daily------------------
 # see if series is stationary
-adf.test(sales_d_ts) #H0, series is non-stationary
+adf.test(food_d_ts) #H0, series is non-stationary
 # p-val < 0.05 =>  reject non stationary: series might be stationary
 # no need for differencing (?)
 
 # see the acf and pacf
-tsdisplay(sales_d_ts)
+tsdisplay(food_d_ts)
 # But has correlation of great order
 
+tsdisplay(diff(food_d_ts))
 # ACF and PACF show a lot of seasonality
 # try with 2 differences
 
 ### Manual ARIMA------------
 # ARIMA(p,d,q) = (2,1,0)
-arima1_d<- Arima(sales_d_ts, order=c(1,0,1))
+arima1_d<- Arima(food_d_ts, order=c(1,1,1))
 summary(arima1_d)
 
 # study residual to see if is a good model
@@ -1710,9 +1923,9 @@ tsdisplay(resid1_d)
 # Residuals are not stationary - they have autocorrelation
 
 ### Auto-ARIMA------------
-arima2_d <- auto.arima(sales_d_ts)
+arima2_d <- auto.arima(food_d_ts)
 
-summary(arima2_d) # order (5,1,3)
+summary(arima2_d) # order (5,1,5)
 summary(arima1_d)
 # AIC is better in autoarima
 
@@ -1721,11 +1934,125 @@ resid2_d<- residuals(arima2_d)
 tsdisplay(resid2_d)
 # resids have autocorrelation still
 
-## 7.2 SARIMA----------------------------
+
+
+## 7.2 Standard ARIMA BAR---------------------------------
+## Monthly------------------
+plot(bar_m_ts)
+# See if series is stationary
+adf.test(bar_m_ts) #H0, series is non-stationary
+# p-val > 0.05 => dont reject, non stationary: series is not stationary
+adf.test(diff(bar_m_ts)) #H0, series is non-stationary
+
+# See the acf and pacf
+tsdisplay(diff(bar_m_ts)) 
+tsdisplay(bar_m_ts)
+# PACF suggest AR-1
+# ACF suggests confirms?
+
+### Manual ARIMA------------
+# ARIMA(p,d,q) = (1,1,0)
+arima1_b_m <- Arima(bar_m_ts, order = c(1, 1, 0))
+summary(arima1_b_m)
+
+# Study residuals to see if it is a good model
+resid1_b_m <- residuals(arima1_b_m)
+tsdisplay(resid1_b_m)
+
+# Residuals seem stationary
+
+### Auto-ARIMA------------
+arima2_b_m <- auto.arima(bar_m_ts)
+
+summary(arima2_b_m) # arima 0,1,0
+summary(arima1_b_m)
+# AIC is almost the same, but keep the AR-1
+
+# Study residuals to see if it is a good model
+resid2_b_m <- residuals(arima2_b_m)
+tsdisplay(resid2_b_m)
+
+# better arima 1,1,0
+
+## Weekly------------------
+# See if series is stationary
+adf.test(bar_w_ts) #H0, series is non-stationary
+# p-val > 0.05 => dont reject, non stationary: series is not stationary
+adf.test(diff(bar_w_ts)) # after diff is stationary
+# Series is stationary
+
+# See the acf and pacf
+tsdisplay(diff(bar_w_ts))
+# PACF suggest AR-1
+# ACF suggest ARIMA 1,1,0
+
+### Manual ARIMA------------
+# ARIMA(p,d,q) = (1,1,1)
+arima1_b_w <- Arima(bar_w_ts, order = c(1, 1, 0))
+summary(arima1_b_w)
+
+# Study residuals to see if it is a good model
+resid1_b_w <- residuals(arima1_b_w)
+tsdisplay(resid1_b_w)
+
+# Residuals seem stationary
+
+### Auto-ARIMA------------
+arima2_b_w <- auto.arima(bar_w_ts)
+
+summary(arima2_b_w)
+summary(arima1_b_w)
+# Auto-ARIMA is better slightly
+
+# Study residuals to see if it is a good model
+resid2_b_w <- residuals(arima2_b_w)
+tsdisplay(resid2_b_w)
+
+## Daily------------------
+# See if series is stationary
+adf.test(bar_d_ts) #H0, series is non-stationary
+# p-val < 0.05 => reject non-stationary: series might be stationary
+# No need for differencing (?)
+
+# See the acf and pacf
+tsdisplay(bar_d_ts)
+# But has correlation of great order
+
+tsdisplay(diff(bar_d_ts))
+# ACF and PACF show a lot of seasonality
+# Try with 2 differences
+
+### Manual ARIMA------------
+# ARIMA(p,d,q) = (1,1,1)
+arima1_b_d <- Arima(bar_d_ts, order = c(1, 1, 1))
+summary(arima1_b_d)
+
+# Study residuals to see if it is a good model
+resid1_b_d <- residuals(arima1_b_d)
+tsdisplay(resid1_b_d)
+
+# Residuals are not stationary - they have autocorrelation
+
+### Auto-ARIMA------------
+arima2_b_d <- auto.arima(bar_d_ts)
+
+summary(arima2_b_d) # Order (5,1,3)
+summary(arima1_b_d)
+# AIC is better in auto-ARIMA
+
+# Study residuals to see if it is a good model
+resid2_b_d <- residuals(arima2_b_d)
+tsdisplay(resid2_b_d)
+# Residuals have autocorrelation still
+
+
+## 7.2 SARIMA FOOD----------------------------
 ## Daily-------------------------
-tsdisplay(sales_d_ts) # 
-tsdisplay(diff(sales_d_ts))
-sarima1_d<- Arima(sales_d_ts, order=c(0,1,1), seasonal=c(0,0,1))
+tsdisplay(food_d_ts) # 
+tsdisplay(diff(food_d_ts))
+# still not stationary
+frequency(food_d_ts)
+sarima1_d<- Arima(food_d_ts,  order = c(1,1,1),seasonal=list(order=c(0,0,1), period=7)) # period 7 to adjust seasonal behaviour
 summary(sarima1_d)
 
 # study residual to see if is a good model
@@ -1735,32 +2062,61 @@ tsdisplay(resid1_ds)
 
 
 # Fit auto.arima with seasonal components
-sarima2_d <- auto.arima(sales_d_ts, seasonal=TRUE)
+sarima2_d <- auto.arima(food_d_ts, seasonal=TRUE)
 summary(sarima2_d)
 # model 2 is better, lower AIC
 resid2_ds<- residuals(sarima2_d)
-tsdisplay(resid2_ds)
-
-#still some autocorrelation at lags 5,9
+tsdisplay(resid2_ds, lag.max = 30)
+#still some autocorrelation maybe
 # check for autocorrelation
-Box.test(residuals(sarima2_d), lag=10, type="Ljung-Box")
-# A low p-value (<0.05) suggests residual autocorrelation.
-# Residuals have autocorrelation
 
+Box.test(residuals(sarima2_d), lag=30, type="Ljung-Box")
+# A low p-value (<0.05) suggests residual autocorrelation.
+# Residuals have no autocorrelation
+
+## 7.3 SARIMA BAR----------------------------
+## Daily-------------------------
+tsdisplay(bar_d_ts, lag.max = 30)
+tsdisplay(diff(bar_d_ts), lag.max = 30)
+# still not stationary
+frequency(bar_d_ts)
+sarima1_b_d<- Arima(bar_d_ts,  order = c(1,1,1),seasonal=list(order=c(0,0,1), period=7)) # period 7 to adjust seasonal behaviour
+summary(sarima1_b_d)
+
+# study residual to see if is a good model
+resid1_b_ds<- residuals(sarima1_b_d)
+tsdisplay(resid1_b_ds, lag.max= 30)
+# autocorrelation still present
+
+
+# Fit auto.arima with seasonal components
+sarima2_b_d <- auto.arima(bar_d_ts, seasonal=TRUE)
+summary(sarima2_b_d)
+# model 2 is better, lower AIC
+resid2_b_ds<- residuals(sarima2_b_d)
+tsdisplay(resid2_b_ds, lag.max = 30)
+# still some autocorrelation
+# check for autocorrelation
+
+Box.test(residuals(sarima2_b_d), lag=30, type="Ljung-Box")
+# A low p-value (<0.05) suggests residual autocorrelation.
+# Residuals have  autocorrelation
 # Need to adress by doing SARIMAX
-## 7.3 SARIMAX---------------------
+
+## 7.4 SARIMAX FOOD---------------------
 ### Daily--------------------------
 
-# readefine sales_d_ts
+# re-define food_d_ts
 head(df_merged_d)
-sales_d_ts <- ts(exp(df_merged_d$sales_cop), frequency=365, start=c(2021, 334))  # 334 is November 30
-seasonal_sales_d_ts <- ts(exp(df_merged_d$sales_cop), frequency=7, start=c(2021, 334))  # 334 is November 30
-plot(sales_d_ts)
-tsdisplay(sales_d_ts,lag.max = 30)
-tsdisplay(seasonal_sales_d_ts,lag.max = 30)
+plot(food_d_ts)
+tsdisplay(food_d_ts,lag.max = 30)
+
 # define regresors
 # Select specific columns by name
 x_regressors_d <- df_merged_d %>% select(rain_sum, fx, tmedian)
+
+length(food_d_ts) == nrow(x_regressors_d) # check they are the same length
+
 # Apply the exponential function to each column
 x_regressors_d <- as.data.frame(apply(x_regressors_d, 2, exp))
 # Convert to a matrix for ARIMA modeling
@@ -1769,7 +2125,7 @@ x_regressors_d <- as.matrix(x_regressors_d)
 # fit the model on sales
 # Fit an auto.arima model with seasonal component and external regressors
 sarimax_model_d <- auto.arima(
-  sales_d_ts,
+  food_d_ts,
   seasonal = TRUE,               # Enable seasonal components
   xreg = x_regressors_d          # External regressors
 )
@@ -1780,35 +2136,17 @@ summary(sarimax_model_d)
 # Validate residuals
 checkresiduals(sarimax_model_d)
 
-# fit the model on seasonal sales
-# Fit an auto.arima model with seasonal component and external regressors
-sarimax_model_d2 <- auto.arima(
-  seasonal_sales_d_ts,
-  seasonal = TRUE,               # Enable seasonal components
-  xreg = x_regressors_d          # External regressors
-)
-
-# Display the summary of the fitted model
-summary(sarimax_model_d2)
-
-# Validate residuals
-checkresiduals(sarimax_model_d2)
-# they still escape the confidence intervals
-
-resid_sarimax2_seasonal <- residuals(sarimax_model_d2)
-adf.test(resid_sarimax2_seasonal)
-Box.test(resid_sarimax2_seasonal, lag = 10, type = "Ljung-Box")
-# Ljung Box indicates resids are white noise, at p-val 0.05
-# But ADF Test says the resids are stationary
-tsdisplay(resid_sarimax2_seasonal)
 
 # set a search for best model
 sarimax_model_d3 <- auto.arima(
-  seasonal_sales_d_ts,
+  food_d_ts,
   seasonal = TRUE,
   xreg = x_regressors_d,
   max.p = 5, max.q = 5, max.P = 2, max.Q = 2,
   stepwise = FALSE, approximation = FALSE)
+
+# check residuals
+checkresiduals(sarimax_model_d3)
 
 # get residuals
 resid_sarimax3_seasonal <- residuals(sarimax_model_d3)
@@ -1825,23 +2163,70 @@ Box.test(resid_sarimax3_seasonal, lag = 10, type = "Ljung-Box")
 tsdisplay(resid_sarimax3_seasonal, lag.max = 30)
 # we see lags with correlation
 
-checkresiduals(resid_sarimax3_seasonal)
+## 7.5 SARIMAX FOOD---------------------
+### Daily--------------------------
+
+
+
+# fit the model on bar
+# Fit an auto.arima model with seasonal component and external regressors
+sarimax_model_b_d <- auto.arima(
+  bar_d_ts,
+  seasonal = TRUE,               # Enable seasonal components
+  xreg = x_regressors_d          # External regressors
+)
+
+# Display the summary of the fitted model
+summary(sarimax_model_b_d)
+
+# Validate residuals
+checkresiduals(sarimax_model_b_d)
+
+
+# set a search for best model
+sarimax_model_b_d3 <- auto.arima(
+  bar_d_ts,
+  seasonal = TRUE,
+  xreg = x_regressors_d,
+  max.p = 5, max.q = 5, max.P = 2, max.Q = 2,
+  stepwise = FALSE, approximation = FALSE)
+
+# check residuals
+checkresiduals(sarimax_model_b_d3)
+
+# get residuals
+resid_sarimax3_b_seasonal <- residuals(sarimax_model_b_d3)
+
+# ADF Test for stationarity
+adf.test(resid_sarimax3_b_seasonal)
+# are stationary according to adf test
+
+# Ljung-Box Test for autocorrelation
+Box.test(resid_sarimax3_b_seasonal, lag = 10, type = "Ljung-Box")
+# serial correlation accoriding to this
+
+# ACF and PACF plots
+tsdisplay(resid_sarimax3_b_seasonal, lag.max = 30)
+# we see lags with correlation
+# Need to extend model to fix this
+
+
 
 # 8. Model Mixture--------------
-## 8.1 GGM + SARIMA----------------
+## 8.1 GGM + SARIMA FOOD----------------
 ### Weekly------------------------------
 #### GGM-------------------------------
 
 summary(ggm1_w) # this one is best model found
 
 
-pred_GGM_w<- predict(ggm1_w, newx=matrix(1:length(sales_w_ts), ncol=1))
+pred_GGM_w <- predict(ggm1_w, newx=matrix(1:length(food_w_ts), ncol=1))
 pred_GGM_w.inst<- make.instantaneous(pred_GGM_w)
 pred_GGM_w.inst
 
 # set same timeframe for GGM preds
-start_time_w <- start(sales_w_ts)  # Get start time from sales_w_ts
-frequency_w <- frequency(sales_w_ts)  # Get frequency from sales_w_ts
+start_time_w <- start(food_w_ts)  # Get start time from sales_w_ts
+frequency_w <- frequency(food_w_ts)  # Get frequency from sales_w_ts
 
 # Convert pred_GGM to a numeric vector
 pred_GGM_w_vec <- unlist(pred_GGM_w.inst)  # Flatten the list to a numeric vector
@@ -1849,31 +2234,30 @@ pred_GGM_w_vec <- unlist(pred_GGM_w.inst)  # Flatten the list to a numeric vecto
 pred_GGM_w_ts <- ts(pred_GGM_w_vec, start = start_time_w, frequency = frequency_w)
 
 
-plot(sales_w_ts, type= "b",xlab="Week", ylab="Weekly Sales",  pch=16, lty=3, cex=0.6)
+plot(food_w_ts, type= "b",xlab="Week", ylab="Weekly Sales",  pch=16, lty=3, cex=0.6)
 lines(pred_GGM_w_ts, col = "red", lty = 2)
 
 
 #### SARMAX refinement------------------------
 
+fit.food_w <- fitted(ggm1_w)  # Predicted values from the GGM model
 
-fit.sales_w <- fitted(ggm1_w)  # Predicted values from the GGM model
-
-if (length(fit.sales_w) != length(sales_w_ts)) {
-  stop("fit.sales_w and sales_w_ts lengths do not match")
+if (length(fit.food_w) != length(food_w_ts)) {
+  stop("lengths do not match")
 }
 
-summary(fit.sales_w) 
-length(fit.sales_w) == length(cumsum(sales_w_ts))  # Should return TRUE
+summary(fit.food_w) 
+length(fit.food_w) == length(cumsum(food_w_ts))  # Should return TRUE
 
-fit.sales_w <- scale(fit.sales_w) # scale regresor to make convergence
+fit.food_w <- scale(fit.food_w) # scale regresor to make convergence
 
-sales_w_ts_scaled <- scale(cumsum(sales_w_ts))  # Scale the time series because if not will not reach convergence
+food_w_ts_scaled <- scale(cumsum(food_w_ts))  # Scale the time series because if not will not reach convergence
 
 sarima_w <- Arima(
-  sales_w_ts_scaled, 
+  food_w_ts_scaled, 
   order = c(1, 0, 1), 
   seasonal = list(order = c(0, 0, 1), period = 52), 
-  xreg = fit.sales_w # this is the GGM fitted values
+  xreg = fit.food_w # this is the GGM fitted values
 )
 
 summary(sarima_w)
@@ -1883,8 +2267,8 @@ summary(sarima_w)
 fitted_cumulative <- fitted(sarima_w)
 
 # Reverse scaling transformation to get fitted cumulative values in the original scale
-scaling_center <- attr(sales_w_ts_scaled, "scaled:center")
-scaling_scale <- attr(sales_w_ts_scaled, "scaled:scale")
+scaling_center <- attr(food_w_ts_scaled, "scaled:center")
+scaling_scale <- attr(food_w_ts_scaled, "scaled:scale")
 
 fitted_cumulative_original <- fitted_cumulative * scaling_scale + scaling_center
 
@@ -1894,8 +2278,8 @@ fitted_instantaneous <- diff(c(fitted_cumulative_original, NA))  # Add NA to ali
 # Create a time series object for the fitted instantaneous values
 fitted_instantaneous_ts <- ts(
   fitted_instantaneous, 
-  start = start(sales_w_ts), 
-  frequency = frequency(sales_w_ts)
+  start = start(food_w_ts), 
+  frequency = frequency(food_w_ts)
 )
 
 # Check the fitted instantaneous values
@@ -1905,7 +2289,7 @@ plot(fitted_instantaneous_ts)
 # plot
 
 # Plot original instantaneous values vs fitted instantaneous values
-plot(sales_w_ts, type = "p", col = "blue", pch = 16,
+plot(food_w_ts, type = "p", col = "blue", pch = 16,
      main = "Original vs Fitted Instantaneous Values",
      xlab = "Time", ylab = "Instantaneous Values")
 
@@ -1913,9 +2297,10 @@ plot(sales_w_ts, type = "p", col = "blue", pch = 16,
 lines(fitted_instantaneous_ts, col = "red", lwd = 3, lty = 1)
 
 # Add legend
-legend("topright", legend = c("Original Instantaneous", "Fitted Instantaneous"),
+legend("topleft", legend = c("Original Instantaneous", "Fitted Instantaneous"),
        col = c("blue", "red"), lty = c(NA, 1), pch = c(16, NA), lwd = c(NA, 3))
 
+#!!!!!!!!! VOY ACA-----------------------------------------------------
 #### Residuals-----------------------
 # Step 1: Extract residuals from the SARIMA model
 resid_w <- residuals(sarima_w)
