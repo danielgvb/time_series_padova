@@ -1,8 +1,10 @@
 ---
 title: "R Notebook"
-output: html_notebook
-editor_options: 
-  markdown: 
+output:
+  html_document:
+    df_print: paged
+editor_options:
+  markdown:
     wrap: 72
 ---
 
@@ -38,8 +40,6 @@ library(prophet)
 ### Import Data
 
 ```{r}
-#setwd('/Users/fabiopimentel/Documents/Padua/clases/segundo año primer semestre/BEF data/proyecto/time_series_padova-main')
-
 # target variable
 sales <- read_excel("data/sales/sales_dimsum_31102024.xlsx")
 
@@ -112,8 +112,7 @@ plot(sales$sales_cop)
 ### Sales Monthly
 
 ```{r}
-# sales
-## sales monthly
+# sales monthly
 df_sales_m <- sales %>%
   mutate(month = floor_date(date, "month")) %>% # Extract month
   group_by(month) %>%
@@ -126,9 +125,9 @@ head(df_sales_m)
 ### Sales Weekly
 
 ```{r}
-## sales weekly
+# sales weekly
 df_sales_w <- sales %>%
-  mutate(week = floor_date(date, "week")) %>% # Extract month
+  mutate(week = floor_date(date, "week")) %>% # Extract week
   group_by(week) %>%
   summarise(sales_w = sum(sales_cop), bar_w = sum(bar), food_w = sum(food))     # Summing values
 
@@ -178,12 +177,12 @@ head(df_google_w)
 ### Rain
 
 ```{r}
-## rain
+# rain
 df_rain_g = rain %>%
   group_by(date, region) %>%
   summarise(rain_sum=sum(contribution_m3s))
 
-df_rain_g  <- df_rain_g[df_rain_g$region=="ANTIOQUIA",]
+df_rain_g  <- df_rain_g[df_rain_g$region=="ANTIOQUIA",] # filter only Antioquia region
 
 head(df_rain_g)
 
@@ -230,7 +229,6 @@ head(df_temp_w)
 #### Daily Data
 
 ```{r}
-## daily data----------
 #sales, rain, fx are the only ones daily
 df_merged_d <- merge(sales, df_rain_g, by = "date", all = FALSE) # Inner join
 df_merged_d <- merge(df_merged_d, fx, by = "date", all = FALSE) # Inner join
@@ -243,7 +241,6 @@ head(df_merged_d)
 #### Weekly Data
 
 ```{r}
-### weekly data----------
 df_merged_w <- merge(df_sales_w, df_rain_w, by="week", all=F)
 df_merged_w <- merge(df_merged_w, df_google_w, by="week", all=F)
 df_merged_w <- merge(df_merged_w, df_fx_w, by="week", all=F)
@@ -255,12 +252,12 @@ head(df_merged_w)
 #### Monthly Data
 
 ```{r}
-### monthly data----------
-# change colnames
+# change colnames before merge
 names(eco_growth) <- c("month", "ise")
 names(inflation) <- c("month", "inflation")
 names(unemployment) <- c("month", "unemployment") 
 
+# merge iteratively
 df_merged_m <- merge(df_sales_m, df_rain_m, by="month", all=F)
 nrow(df_merged_m)
 
@@ -270,7 +267,7 @@ nrow(df_merged_m)
 df_merged_m <- merge(df_merged_m, df_google_m, by="month", all=F)
 nrow(df_merged_m)
 
-df_merged_m <- merge(df_merged_m, eco_growth, by="month", all=F) # only has until aug 2024
+df_merged_m <- merge(df_merged_m, eco_growth, by="month", all=F) 
 nrow(df_merged_m)
 
 df_merged_m <- merge(df_merged_m, inflation, by="month", all=F)
@@ -287,7 +284,7 @@ nrow(df_merged_m)
 
 ```{r}
 objects_to_keep <- c("df_merged_d", "df_merged_w", "df_merged_m")
-# Remove all objects except those specified
+# Remove all objects except those specified to keep workspace clean
 rm(list = setdiff(ls(), objects_to_keep))
 ```
 
@@ -348,10 +345,6 @@ ggplot(df_sales_m_long, aes(x = month, y = Value, fill = Category)) +
   theme_minimal()
 ```
 
-
-
-
-
 ```{r}
 # Weekly
 # Reshape the data to a long format
@@ -392,9 +385,10 @@ tseries_m <- ts(df_sales_m_filtered$sales_m , start = c(2022, 1), frequency = 12
 head(tseries_m)
 seasonplot(tseries_m, col = rainbow(3), year.labels = TRUE, main = "Seasonal Plot")
 text(x = 1, y = max(tseries_m) - 1e6, labels = "2024", col = "blue")
-
 ```
+
 ## Density
+
 ```{r}
 # Montly Density
 # Select the columns of interest
@@ -437,7 +431,6 @@ ggplot(df_long_w, aes(x = Value)) +
 
 ```
 
-
 ```{r}
 # Daily Density
 
@@ -463,7 +456,7 @@ ggplot(df_long_d, aes(x = Value)) +
 ## Covariates
 
 ```{r}
-### 3.5.1 economic variables-----------------------
+### Economic Variables--------------------------------
 # economic growth
 ggplot(df_merged_m, aes(x=month, y=ise)) +
   geom_line() + ggtitle("Monthly activity in Colombia")
@@ -485,7 +478,7 @@ ggplot(df_merged_m, aes(x=month, y=unemployment)) +
 # seasonal and trend downwards
 
 
-### 3.5.2 Other variables
+### Other variables------------------------
 
 # google trends
 ggplot(df_merged_w, aes(x=week, y=google_w)) +
@@ -561,8 +554,11 @@ corrplot(cor_matrix_w, method = "color", type = "upper", tl.col = "black", tl.sr
 corrplot(cor_matrix_m, method = "color", type = "upper", tl.col = "black", tl.srt = 45)
 
 ```
-Rain has stronger correlation than prcp, so we drop prcp to not repeat the same variable from two sources
-Also we drop average temperature because median temperature seems more trustworthy
+
+Rain has stronger correlation than prcp, so we drop prcp to not repeat
+the same variable from two sources. Rain covers the whole Antioquia
+region, while prcp covers only Medellin. Also drop average temperature
+because median temperature seems more trustworthy.
 
 ```{r}
 # drop prcp beacuse they "are the same"
@@ -570,17 +566,17 @@ df_merged_m <- df_merged_m %>% select(-prcp_m)
 df_merged_w <- df_merged_w %>% select(-prcp_w)
 df_merged_d <- df_merged_d %>% select(-prcp)
 
-# drop avg temp
+# drop avg temp, median looks more stable
 df_merged_d <- df_merged_d %>% select(-tavg)
 colnames(df_merged_d)
 ```
+
 ```{r}
-### drop everything not on use
+### drop everything to clean workspace
 objects_to_keep <- c("df_merged_d", "df_merged_w", "df_merged_m")
 # Remove all objects except those specified
 rm(list = setdiff(ls(), objects_to_keep))
 ```
-
 
 ### Variable Transformation
 
@@ -613,7 +609,7 @@ Monthly
 ```{r}
 # Vars for model
 # Month
-# Ensure the `month` column is in POSIXct format
+# Make sure the `month` column is in POSIXct format
 df_merged_m$month <- as.POSIXct(df_merged_m$month)
 
 # Create the numeric variable: an evenly increasing number
@@ -668,6 +664,7 @@ df_merged_d <- df_merged_d %>%
 ```
 
 ### Time Series Objects
+
 Convert sales to time series objects for the use in several models
 
 ```{r}
@@ -694,12 +691,15 @@ tsdisplay(sales_m_ts)
 ```
 
 ### Log Transformation
-Some variables are scaled to log, so we can interpret the linear models more easily. The covariates are in different scales so it is easier to interpret percentage changes instead of unit changes.
+
+Some variables are scaled to log, so we can interpret the linear models
+more easily. The covariates are in different scales so it is easier to
+interpret percentage changes instead of unit changes.
 
 ```{r}
 # Monthly
 df_merged_m <- df_merged_m %>%
-  mutate(across(where(is.numeric) & !all_of(c("unemployment", "inflation")), ~ log(. + 1)))
+  mutate(across(where(is.numeric) & !all_of(c("unemployment", "inflation")), ~ log(. + 1))) # add 1 in case there is a zero
 
 # Weekly
 df_merged_w <- df_merged_w %>%
@@ -715,6 +715,7 @@ df_merged_d <- df_merged_d %>%
 ### Autocorrelation
 
 ```{r}
+# daily
 #par(mfrow=c(1,1))
 #tsdisplay(sales_d_ts)
 # is not stationary but has no clear trend
@@ -748,14 +749,16 @@ pacf(sales_m_ts)
 # has clear trend, no seasonality
 ```
 
-
 # Models
-In this section we model the time series using various approaches to find the best model for our data.
-We use both linear and non linear models going from the simplest to the more "complex" models.
 
+In this section we model the time series using various approaches to
+find the best model for our data. We use both linear and non linear
+models going from the simplest to the more "complex" models.
 
 ## Helper functions
+
 Functions that help us implement and analyze models faster
+
 ```{r}
 ## Function to create and summarize models------------------
 run_model <- function(formula, data, model_name) {
@@ -781,7 +784,7 @@ add_predictions <- function(model, data, pred_column) {
   return(data)
 }
 
-# Calculate RMSE
+
 # Function to calculate RMSE
 calculate_rmse <- function(observed, predicted) {
   rmse <- sqrt(mean((observed - predicted)^2, na.rm = TRUE))
@@ -789,8 +792,7 @@ calculate_rmse <- function(observed, predicted) {
 }
 
 
-# function that compares linear models
-# Define the function to get R^2 and AIC
+# function that compares linear models with R^2 and AIC
 get_model_stats <- function(models) {
   # Initialize an empty data frame
   stats <- data.frame(
@@ -816,8 +818,9 @@ get_model_stats <- function(models) {
 
 ```
 
-
 ## Linear models
+
+### Monthly
 
 ```{r}
 # Montly Models
@@ -853,19 +856,58 @@ ols2_stepwise <- step(
 # Summary of the final stepwise model
 summary(ols2_stepwise)
 
+
+plot(ols2_stepwise)
+
 # Add predictions from the final stepwise model
 df_merged_m <- add_predictions(ols2_stepwise, df_merged_m, "predicted_sales2")
 
-# Plot Actual vs Predicted Values
-ggplot(df_merged_m, aes(x = month)) +
-  geom_line(aes(y = exp(sales_m), color = "Actual Sales"), size = 1) +
-  geom_line(aes(y = exp(predicted_sales0), color = "Model 0"), linetype = "dashed", size = 1) +
-  geom_line(aes(y = exp(predicted_sales1), color = "Model 1"), linetype = "dotted", size = 1) +
-  geom_line(aes(y = exp(predicted_sales2), color = "Model 2 Stepwise"), linetype = "dotdash", size = 1) +
-  labs(title = "Actual vs Predicted Monthly Sales for All Models",
-       x = "Month", y = "Sales", color = "Legend") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Plot Actual vs Predicted Values 
+plot_colors <- c("black", "red", "blue", "darkgreen")
+line_types <- c(1, 2, 3,4)  # Solid, dashed, and dotted lines
+
+par(mfrow = c(1,1))
+# the base plot for actual sales
+plot(
+  df_merged_m$month, exp(df_merged_m$sales_m),
+  type = "p",  # Points for actual sales
+  col = "black", pch = 16,
+  xlab = "Month",
+  ylab = "Sales",
+  main = "Actual vs Predicted Monthly Sales for All Models"
+)
+
+# Add the lines for each model
+lines(
+  df_merged_m$month, exp(df_merged_m$predicted_sales0),
+  col = plot_colors[2],
+  lty = line_types[2],
+  lwd = 2
+)
+lines(
+  df_merged_m$month, exp(df_merged_m$predicted_sales1),
+  col = plot_colors[3],
+  lty = line_types[3],
+  lwd = 2
+)
+lines(
+  df_merged_m$month, exp(df_merged_m$predicted_sales2),
+  col = plot_colors[4],
+  lty = 4,
+  lwd = 2
+)
+
+# Add a legend
+legend(
+  "bottomright",
+  legend = c("Actual Sales", "Model 0", "Model 1", "Model 2 Stepwise"),
+  col = c("black", plot_colors[2:4]),
+  lty = c(NA, line_types[2:4]),
+  pch = c(16, NA, NA, NA),
+  bty = "n"
+)
+
 
 
 # Models to compare
@@ -877,9 +919,6 @@ models <- list(
 
 # Get R^2 and AIC for each model
 model_stats <- get_model_stats(models)
-
-# View the results
-print(model_stats)
 
 
 #  RMSE calculation for the original (exponentiated) scale
@@ -904,16 +943,27 @@ for (i in seq_along(models)) {
   rmse_stats <- rbind(rmse_stats, data.frame(Model = model_name, RMSE = rmse))
 }
 
-# View RMSE statistics
-print(rmse_stats)
+# Combine R^2, AIC, and RMSE into one table
+combined_stats <- merge(model_stats, rmse_stats, by = "Model")
+
+# View the combined table
+print(combined_stats)
+
 
 ```
 
-
 ```{r}
+# set the best model rmse
 rmse_ols_m <- rmse_stats$RMSE[3]
 rmse_ols_m
 ```
+
+```{r}
+# check teh residuals of the best model
+checkresiduals(ols2_stepwise$residuals)
+```
+
+### Weekly
 
 ```{r}
 # Weekly Models
@@ -933,7 +983,7 @@ df_merged_w <- add_predictions(ols1w, df_merged_w, "predicted_sales1")
 ## Model 2A: Experimentation
 
 
-# Start with the full model (excluding food and bar)
+# Start with the full model 
 ols2_full_w <- lm(
   sales_w ~ numeric_week + seasonal_month + fx_w +
     google_w + temp_w + rain_w, 
@@ -954,16 +1004,47 @@ summary(ols2_stepwise_w)
 # Add predictions from the final stepwise model
 df_merged_w <- add_predictions(ols2_stepwise_w, df_merged_w, "predicted_sales2")
 
-# Plot Actual vs Predicted Values
-ggplot(df_merged_w, aes(x = week)) +
-  geom_line(aes(y = exp(sales_w), color = "Actual Sales"), size = 1) +
-  geom_line(aes(y = exp(predicted_sales0), color = "Model 0"), linetype = "dashed", size = 1) +
-  geom_line(aes(y = exp(predicted_sales1), color = "Model 1"), linetype = "dotted", size = 1) +
-  geom_line(aes(y = exp(predicted_sales2), color = "Model 2 Stepwise"), linetype = "dotdash", size = 1) +
-  labs(title = "Actual vs Predicted Weekly Sales for All Models",
-       x = "Week", y = "Sales", color = "Legend") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Plot Actual vs Predicted Values 
+par(mfrow = c(1,1))
+plot(
+  df_merged_w$week, exp(df_merged_w$sales_w),
+  type = "p",  # Points for actual sales
+  col = "black", pch = 16,
+  xlab = "Week",
+  ylab = "Sales",
+  main = "Actual vs Predicted Weekly Sales for All Models"
+)
+
+# Add the lines for each model
+lines(
+  df_merged_w$week, exp(df_merged_w$predicted_sales0),
+  col = plot_colors[2],
+  lty = line_types[2],
+  lwd = 2
+)
+lines(
+  df_merged_w$week, exp(df_merged_w$predicted_sales1),
+  col = plot_colors[3],
+  lty = line_types[3],
+  lwd = 2
+)
+lines(
+  df_merged_w$week, exp(df_merged_w$predicted_sales2),
+  col = plot_colors[4],
+  lty = 4,
+  lwd = 2
+)
+
+# Add a legend
+legend(
+  "bottomright",
+  legend = c("Actual Sales", "Model 0", "Model 1", "Model 2 Stepwise"),
+  col = c("black", plot_colors[2:4]),
+  lty = c(NA, line_types[2:4]),
+  pch = c(16, NA, NA, NA),
+  bty = "n"
+)
 
 # Models to compare
 models_w <- list(
@@ -972,11 +1053,9 @@ models_w <- list(
   "Model all covariates step" = ols2_stepwise_w
 )
 
+
 # Get R^2 and AIC for each model
 model_stats_w <- get_model_stats(models_w)
-
-# View the results
-print(model_stats_w)
 
 
 rmse_stats_w <- data.frame(
@@ -1000,21 +1079,34 @@ for (i in seq_along(models_w)) {
   rmse_stats_w <- rbind(rmse_stats_w, data.frame(Model = model_name, RMSE = rmse))
 }
 
-# View RMSE statistics
-print(rmse_stats_w)
+# Combine R^2, AIC, and RMSE into one table
+combined_stats_w <- merge(model_stats_w, rmse_stats_w, by = "Model")
+
+# View the combined table
+print(combined_stats_w)
 
 ```
 
 ```{r}
+# set best model rmse
 rmse_ols_w <- rmse_stats_w$RMSE[3]
 rmse_ols_w
 ```
 
+```{r}
+# see residuals
+checkresiduals(ols2_stepwise_w$residuals)
+
+```
+
+Residuals are autocorrelated and have structure
+
+### Daily
 
 ```{r}
 # Daily Models
 head(df_merged_d,25)
-# properly start in december
+# properly start in december to avoid noise of november poor sales
 df_merged_d <-  df_merged_d %>%
   filter(date > "2021-11-30")
 head(df_merged_d)
@@ -1052,15 +1144,45 @@ summary(ols2_stepwise_d)
 df_merged_d <- add_predictions(ols2_stepwise_d, df_merged_d, "predicted_sales2")
 
 # Plot Actual vs Predicted Values
-ggplot(df_merged_d, aes(x = date)) +
-  geom_line(aes(y = exp(sales_cop), color = "Actual Sales"), size = 1) +
-  geom_line(aes(y = exp(predicted_sales0), color = "Model 0"), linetype = "dashed", size = 1) +
-  geom_line(aes(y = exp(predicted_sales1), color = "Model 1"), linetype = "dotted", size = 1) +
-  geom_line(aes(y = exp(predicted_sales2), color = "Model 2 Stepwise"), linetype = "dotdash", size = 1) +
-  labs(title = "Actual vs Predicted Sales for All Models",
-       x = "date", y = "Sales", color = "Legend") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+par(mfrow = c(1,1))
+plot(
+  df_merged_d$date, exp(df_merged_d$sales_cop),
+  type = "p",  # Points for actual sales
+  col = "black", pch = 16,
+  xlab = "Date",
+  ylab = "Sales",
+  main = "Actual vs Predicted Daily Sales for All Models"
+)
+
+# Add the lines for each model
+lines(
+  df_merged_d$date, exp(df_merged_d$predicted_sales0),
+  col = plot_colors[2],
+  lty = line_types[2],
+  lwd = 2
+)
+lines(
+  df_merged_d$date, exp(df_merged_d$predicted_sales1),
+  col = plot_colors[3],
+  lty = line_types[3],
+  lwd = 2
+)
+lines(
+  df_merged_d$date, exp(df_merged_d$predicted_sales2),
+  col = plot_colors[4],
+  lty = 4,
+  lwd = 2
+)
+
+# Add a legend
+legend(
+  "topleft",
+  legend = c("Actual Sales", "Model 0", "Model 1", "Model 2 Stepwise"),
+  col = c("black", plot_colors[2:4]),
+  lty = c(NA, line_types[2:4]),
+  pch = c(16, NA, NA, NA),
+  bty = "n"
+)
 
 
 # Models to compare
@@ -1073,8 +1195,6 @@ models_d <- list(
 # Get R^2 and AIC for each model
 model_stats_d <- get_model_stats(models_d)
 
-# View the results
-print(model_stats_d)
 
 #  RMSE calculation for the original (exponentiated) scale for daily models
 rmse_stats_d <- data.frame(
@@ -1098,20 +1218,37 @@ for (i in seq_along(models_d)) {
   rmse_stats_d <- rbind(rmse_stats_d, data.frame(Model = model_name, RMSE = rmse))
 }
 
-# View RMSE statistics for daily data
-print(rmse_stats_d)
+# Combine R^2, AIC, and RMSE into one table
+combined_stats_d <- merge(model_stats_d, rmse_stats_d, by = "Model")
+
+# View the combined table
+print(combined_stats_d)
+
 ```
 
 ```{r}
+# set best model rmse
 rmse_ols_d <- rmse_stats_d$RMSE[3]
 rmse_ols_d
 ```
 
-## Non Linear Models
-Here we explore non linear models, starting from the simplest to more elaborate models in the end combining some of the used models.
+```{r}
+# check residuals of best model
+checkresiduals(ols2_stepwise_d$residuals)
+```
+
+Residuals have autocorrelation and some are too far from mean.
+
+## Non-Linear Models
+
+Here we explore non linear models, starting from the simplest to more
+elaborate models in the end combining some of the used models.
 
 ### Wrangle data for models
-The time series are altered so the visualizations are more understandable, basically we change the date index in the timeseries objects
+
+The time series are altered so the visualizations are more
+understandable, basically we change the date index in the time series
+objects
 
 ```{r}
 # re-declare time-series beacause we droped some rows:
@@ -1136,14 +1273,15 @@ start_m_year <- as.numeric(format(start_m, "%Y"))
 start_m_month <- as.numeric(format(start_m, "%m"))
 
 # Declare time series with appropriate frequencies
+# remember that the sales were log, so restablish their original scale (exp)
 sales_d_ts <- ts(exp(df_merged_d$sales_cop), start = c(start_d_year, start_d_day), frequency = 365)
 sales_w_ts <- ts(exp(df_merged_w$sales_w), start = c(start_w_year, start_w_week), frequency = 52)
 sales_m_ts <- ts(exp(df_merged_m$sales_m), start = c(start_m_year, start_m_month), frequency = 12)
-
+# do the same for food and bar
 food_d_ts <- ts(exp(df_merged_d$food), start = c(start_d_year, start_d_day), frequency = 365)
 food_w_ts <- ts(exp(df_merged_w$food_w), start = c(start_w_year, start_w_week), frequency = 52)
 food_m_ts <- ts(exp(df_merged_m$food_m), start = c(start_m_year, start_m_month), frequency = 12)
-
+# bar
 bar_d_ts <- ts(exp(df_merged_d$bar), start = c(start_d_year, start_d_day), frequency = 365)
 bar_w_ts <- ts(exp(df_merged_w$bar_w), start = c(start_w_year, start_w_week), frequency = 52)
 bar_m_ts <- ts(exp(df_merged_m$bar_m), start = c(start_m_year, start_m_month), frequency = 12)
@@ -1167,15 +1305,19 @@ plot(bar_w_ts)
 plot(bar_m_ts)
 ```
 
-Here we fill the sales = 0 values with the mean of the two adjacent dates. This in order to have smoother models.
-The dates with sales = 0 are dates that are national holiday like christmas or new years, or inventory day in which the kitchen cannot operate so the sales are 0.
+Here we fill the sales = 0 values with the mean of the two adjacent
+dates. Or intrapolation in simpler terms. We dothis in order to have
+smoother models. The dates with sales = 0 are dates that are national
+holiday like Christmas or new years: or inventory day in which the
+kitchen cannot operate so the sales are 0.
+
 ```{r}
 # Function to replace 1s with the mean of previous and next observations
 fill_ones <- function(ts_data) {
   # Convert time series to numeric vector
   ts_vec <- as.numeric(ts_data)
   
-  # Loop through and replace 1s
+  # Loop through and replace 1s / not 0s because we addded 1 prior log to avoid error
   for (i in seq_along(ts_vec)) {
     if (ts_vec[i] == 1) {
       # Check boundaries to avoid indexing issues
@@ -1218,25 +1360,34 @@ plot(cumsum(sales_m_ts)) #Returns a vector whose elements are the cumulative sum
 ```{r}
 # Bass model
 bm_m<-BM(sales_m_ts,display = T) # show graphical view of results / display = True
-
 summary(bm_m)
 ```
 
 ```{r}
+# calculate market potential vs sales to date
 bm_m$coefficients['m'] - sum(sales_m_ts)
 ```
-According to this, there are only 1m cop left to sell, this is less than a year / seems wrong. Fits well but the 30- onward is wierd + sales might not be declining yet. Still reflects the innovation and copying in some sense
- 
-Also the restaurants rely in word of mouth to reach full stage
-m = 4.664.000.000 COP, i.e 1 mm EUR approx. / The restaurant has sold 3.515.788.885/ According to this only in 1 year it should extinguish sells p, innovation: 0.832% indicates that the adoption rate due to external influence is relatively low, but not uncommon for many markets. - it is actually relativly innovative q: (8.96%) suggests that imitation plays a larger role than innovation in driving adoption in this market
 
+According to this, there are only 1000 m cop left to sell, this is less
+than a year / seems wrong. Fits well but the 30- onward is weird + sales
+might not be declining yet. Still reflects the innovation and copying in
+some sense
 
+Also the restaurants rely in word of mouth to reach full stage m =
+4.664.000.000 COP, i.e 1 mm EUR approx. / The restaurant has sold
+3.515.788.885/ According to this only in 1 year it should extinguish
+sells p, innovation: 0.832% indicates that the adoption rate due to
+external influence is relatively low, but not uncommon for many
+markets. - it is actually relativly innovative q: (8.96%) suggests that
+imitation plays a larger role than innovation in driving adoption in
+this market
 
 ```{r}
+# Fitted values
 pred_bm_m<- predict(bm_m, newx=c(1:length(sales_m_ts)))
-pred_bm_m <- ts(pred_bm_m, start = start(sales_m_ts), frequency = frequency(sales_m_ts))
-pred.inst_bm_m <- make.instantaneous(pred_bm_m)
-pred.inst_bm_m <- ts(pred.inst_bm_m, start = start(sales_m_ts), frequency = frequency(sales_m_ts))
+pred_bm_m <- ts(pred_bm_m, start = start(sales_m_ts), frequency = frequency(sales_m_ts)) # set same frequency for plots
+pred.inst_bm_m <- make.instantaneous(pred_bm_m) # make instantaneous
+pred.inst_bm_m <- ts(pred.inst_bm_m, start = start(sales_m_ts), frequency = frequency(sales_m_ts)) # frequency for plots
 
 # plot
 plot(sales_m_ts, type = "p", col = "black", pch = 16, cex = 0.7,
@@ -1255,6 +1406,7 @@ legend("topleft", legend = c("Actual Values", "Fitted Values"),
 res_bm_m <- sales_m_ts - pred.inst_bm_m
 tsdisplay(res_bm_m)
 ```
+
 Residuals have some structure and 2 lag has correlation.
 
 ```{r}
@@ -1263,10 +1415,10 @@ rmse_bm_m <- calculate_rmse(observed = sales_m_ts, predicted = pred.inst_bm_m)
 
 # Print the RMSE
 cat("RMSE for Bass Model Predictions:", rmse_bm_m, "\n")
-
 ```
 
 ```{r}
+# Weekly
 bm_w<-BM(sales_w_ts,display = T) # show graphical view of results / display = True
 summary(bm_w)
 bm_w$coefficients['m'] - sum(sales_w_ts)
@@ -1276,10 +1428,13 @@ bm_m$coefficients['q'] / bm_w$coefficients['q'] # they are approx 4 times
 bm_m$coefficients['p'] / bm_w$coefficients['p'] # they are approx 4 times
 # which makes sense
 ```
-Coefficients are approximatly 4 times the ones of the monthly model, making sense because there are 4 weeks in a month. While market potential is similar.
+
+Coefficients are approximatly 4 times the ones of the monthly model,
+making sense because there are 4 weeks in a month. While market
+potential is similar.
 
 ```{r}
-# Prediction
+# Fitted values
 pred_bm_w<- predict(bm_w, newx=c(1:length(sales_w_ts)))
 pred_bm_w <- ts(pred_bm_w, start = start(sales_w_ts), frequency = frequency(sales_w_ts))
 pred.inst_bm_w <- make.instantaneous(pred_bm_w)
@@ -1298,14 +1453,14 @@ legend("topleft", legend = c("Actual Values", "Fitted Values"),
 
 ```
 
-
 ```{r}
 # check residuals
 res_bm_w <- sales_w_ts - pred.inst_bm_w
 tsdisplay(res_bm_w)
 ```
 
-Residuals have some structure and 2 lag has correlation, with clear trend and structure in the residuals
+Residuals have some structure and 2 lag has correlation, with clear
+trend and structure in the residuals
 
 ```{r}
 # RMSE
@@ -1316,7 +1471,9 @@ rmse_bm_w <- calculate_rmse(observed = sales_w_ts, predicted = pred.inst_bm_w)
 cat("RMSE for Bass Model Predictions:", rmse_bm_w, "\n")
 
 ```
+
 ```{r}
+# Daily
 bm_d <- BM(
   sales_d_ts,
   prelimestimates = c(1.2 * sum(sales_d_ts), 0.005, 0.5), # Adjust these estimates
@@ -1332,11 +1489,13 @@ bm_w$coefficients['q'] / bm_d$coefficients['q'] # they are approx 7 times
 bm_w$coefficients['p'] / bm_d$coefficients['p'] # they are approx 7 times
 
 ```
-Coefficients are approximately 1:7 scale of the ones in the weekly model, making sense.
-The market potential is also similar in order of magnitude.
+
+Coefficients are approximately 1:7 scale of the ones in the weekly
+model, making sense. The market potential is also similar in order of
+magnitude.
 
 ```{r}
-# Prediction
+# Fitted values
 pred_bm_d <- predict(bm_d, newx = c(1:length(sales_d_ts)))
 pred_bm_d <- ts(pred_bm_d, start = start(sales_d_ts), frequency = frequency(sales_d_ts))
 pred.inst_bm_d <- make.instantaneous(pred_bm_d)
@@ -1355,14 +1514,14 @@ legend("topleft", legend = c("Actual Values", "Fitted Values"),
 
 ```
 
-
 ```{r}
 # Check residuals
 res_bm_d <- sales_d_ts - pred.inst_bm_d
 tsdisplay(res_bm_d)
 ```
 
-Residuals don not seem stationary, or at least they have a lot of autocorrelation.
+Residuals don not seem stationary, or at least they have a lot of
+autocorrelation.
 
 ```{r}
 # Calculate RMSE for Bass Model predictions (daily data)
@@ -1372,8 +1531,6 @@ rmse_bm_d <- calculate_rmse(observed = sales_d_ts, predicted = pred.inst_bm_d)
 cat("RMSE for Daily Bass Model Predictions:", rmse_bm_d, "\n")
 
 ```
-
-
 
 #### Limitation of of the Bass Model
 
@@ -1443,8 +1600,6 @@ summary(ggm3)
 summary(ggm4)
 ```
 
-
-
 K \<- 7.683785e+09
 
 pc \<- 2.698613e-02
@@ -1456,7 +1611,7 @@ ps \<- 7.731763e-03
 qs \<- 4.508202e-02
 
 ```{r}
-# predictions
+# Fitted values
 pred_ggm_m <- predict(ggm1, newx = c(1:length(sales_m_ts)))
 pred_ggm_m <- ts(pred_ggm_m, start = start(sales_m_ts), frequency = frequency(sales_m_ts))
 pred.inst_ggm_m <- make.instantaneous(pred_ggm_m)
@@ -1475,12 +1630,12 @@ legend("topleft", legend = c("Actual Values", "Fitted Values (GGM)"),
 
 ```
 
-
 ```{r}
 #Analysis of residuals
 res_GGM_m<- sales_m_ts - pred.inst_ggm_m
 tsdisplay(res_GGM_m)
 ```
+
 Residuals look stationary for this model
 
 ```{r}
@@ -1495,7 +1650,8 @@ Box.test(res_GGM_m, lag = 10, type = "Ljung-Box") # h0 res indep
 # p-val > alpha => fail to reject h0, so residuals seem indep
 
 ```
-Residuals are likeley stationary
+
+Residuals are likely stationary
 
 ```{r}
 # Calculate RMSE for ggm1
@@ -1503,8 +1659,8 @@ rmse_ggm1 <- calculate_rmse(observed = sales_m_ts, predicted = pred.inst_ggm_m)
 
 # Print RMSE for ggm1
 cat("RMSE for GGM Model 1 (Base):", rmse_ggm1, "\n")
-
 ```
+
 ```{r}
 # Weekly
 ggm1_w <- GGM(sales_w_ts, mt='base', display = T)
@@ -1554,9 +1710,10 @@ print(adf_test_w) # if p-value < alpha, series is stationary
 # Check for autocorrelation in residuals
 box_test_w <- Box.test(res_GGM_w, lag = 10, type = "Ljung-Box")
 print(box_test_w) # if p-value > alpha, residuals are independent
-
 ```
-Series is stationary according to tests, but clearly has strong autocorrelation
+
+Series is stationary according to tests, but clearly has strong
+autocorrelation
 
 ```{r}
 # RMSE
@@ -1564,7 +1721,6 @@ rmse_ggm_w <- calculate_rmse(observed = sales_w_ts, predicted = pred.inst_ggm_w)
 
 # Print the RMSE
 cat("RMSE for Weekly GGM Model Predictions:", rmse_ggm_w, "\n")
-
 ```
 
 ```{r}
@@ -1577,8 +1733,8 @@ sales_scaled <- (sales_d_ts - sales_min) / (sales_max - sales_min)
 # View scaled data
 summary(sales_scaled)
 plot(sales_scaled, type = "l", main = "Scaled Daily Sales", xlab = "Day", ylab = "Scaled Sales")
-
 ```
+
 We re-scale the data because else the model won't converge
 
 ```{r}
@@ -1596,10 +1752,10 @@ summary(ggm4_d)  # Power transformation
 
 ```
 
-Predict on the best model based on fit and p-values
-We select model 1
+Predict on the best model based on fit and p-values We select model 1
+
 ```{r}
-# Prediction using GGM model
+# Fitted values
 pred_ggm_d <- predict(ggm1_d, newx = c(1:length(sales_scaled)))
 pred_ggm_d <- ts(pred_ggm_d, start = start(sales_scaled), frequency = frequency(sales_scaled))
 pred.inst_ggm_d <- make.instantaneous(pred_ggm_d)
@@ -1621,9 +1777,9 @@ legend("topleft", legend = c("Actual Values", "Fitted Values (GGM, Original Scal
 # Analysis of residuals
 res_GGM_d <- sales_d_ts - pred_original_scale
 tsdisplay(res_GGM_d, main = "Residuals of GGM Model")
-
 ```
-Residuals dont look stationary
+
+Residuals do not look stationary
 
 ```{r}
 # Check for stationarity of residuals
@@ -1634,8 +1790,8 @@ print(adf_test_d)  # If p-value < alpha, series is stationary
 # Check for autocorrelation in residuals
 box_test_d <- Box.test(res_GGM_d, lag = 10, type = "Ljung-Box")
 print(box_test_d)  # If p-value > alpha, residuals are indep
-
 ```
+
 Residuals look stationary in the test but hey have serial correlation
 
 ```{r}
@@ -1644,7 +1800,6 @@ rmse_ggm_d <- calculate_rmse(observed = sales_d_ts, predicted = pred_original_sc
 
 # Print the RMSE
 cat("RMSE for Daily GGM Model Predictions (Original Scale):", rmse_ggm_d, "\n")
-
 ```
 
 ### Holt-Winters Model
@@ -1656,10 +1811,9 @@ sales_m_ts <- ts(sales_m_ts, frequency=12, start=c(2021, 11))
 hw1_m<- hw(sales_m_ts, seasonal="additive")
 hw2_m<- hw(sales_m_ts, seasonal="multiplicative")
 
-# prediction
+# fitted values
 fitted_hw1 <- hw1_m$fitted
 fitted_hw2 <- hw2_m$fitted
-
 ```
 
 We now plot the models
@@ -1698,9 +1852,10 @@ ggplot(plot_data_melted, aes(x = Time, y = Value, color = Series)) +
     legend.position = "top",
     legend.title = element_text(face = "bold")
   )
-
 ```
-Looks like the multiplicative models follows the data more more closely in general.
+
+Looks like the multiplicative models follows the data more more closely
+in general.
 
 ```{r}
 # residuals
@@ -1708,7 +1863,6 @@ residuals_hw1 <- residuals(hw1_m)
 residuals_hw2 <- residuals(hw2_m)  
 tsdisplay(residuals_hw1)
 tsdisplay(residuals_hw2)
-
 ```
 
 ```{r}
@@ -1734,10 +1888,12 @@ Box.test(residuals_hw2, lag = 10, type = "Ljung-Box") # h0 res indep
 # p-val > alpha =>  Dont reject h0, so residuals are indep
 
 ```
-Multiplicative model follows the data better and has slightly better residuals
+
+Multiplicative model follows the data better and has slightly better
+residuals
 
 ```{r}
-# forecast
+# Forecast
 # save the forecast of the second model
 forecast_hw1 <- forecast(hw1_m, h=12)
 forecast_hw2 <- forecast(hw2_m, h=12)
@@ -1769,11 +1925,13 @@ cat("RMSE for Additive Holt-Winters Model:", rmse_hw1, "\n")
 cat("RMSE for Multiplicative Holt-Winters Model:", rmse_hw2, "\n")
 
 ```
+
 Multiplicative model is better
 
-The Holt winters model has a frequency limit of 24, so we cannot do larger than that. Weekly and daily data have 52 and 365 frequencies respectively so we cannot fit the model with the R implementation so far.
-
-
+The Holt winters model has a frequency limit of 24, so we cannot do
+larger than that. Weekly and daily data have 52 and 365 frequencies
+respectively so we cannot fit the model with the R implementation so
+far.
 
 ### ARIMA models
 
@@ -1781,8 +1939,9 @@ ARIMA is a acronym for Auto Regressive Integrated Moving Average, ARIMA
 (p,d,q) where p refers to the AR part, q refers to the MA part and d is
 the degree of first difference involved.
 
+First we need to check if the series is stationary, to know if we have
+to use differences in the ARIMA.
 
-First we nwwd to check if the series is stationary
 ```{r}
 # see if series is stationary
 adf.test(sales_m_ts) #H0, series is non-stationary
@@ -1791,7 +1950,6 @@ adf.test(diff(sales_m_ts)) #H0, series is non-stationary
 
 # see the acf and pacf
 tsdisplay(diff(sales_m_ts))
-
 ```
 
 #### Monthly sales
@@ -1802,7 +1960,6 @@ plot(sales_m_ts)
 
 ```{r}
 ndiffs(sales_m_ts)
-
 ```
 
 ```{r}
@@ -1815,8 +1972,8 @@ Correlogram plot maybe suggests AR-1 or MA-1 after first difference
 # ARIMA(p,d,q) = (1,1,0)
 arima1_m<- Arima(sales_m_ts, order=c(1,1,0))
 summary(arima1_m)
-
 ```
+
 ```{r}
 # study residual to see if is a good model
 resid1_m<- residuals(arima1_m)
@@ -1835,7 +1992,8 @@ checkresiduals(auto_arima_m)
 
 The residuals of the Autoarima look stationary
 
-AIC of the the manual arima is 1265, while the one of the autoarima is 1263. Lets use the autoarima
+AIC of the the manual arima is 1265, while the one of the autoarima is
+1263. Lets use the autoarima
 
 ```{r}
 # Fitted values from both models
@@ -1856,7 +2014,6 @@ plot_data_melted <- melt(plot_data, id.vars = "Time",
                          value.name = "Value")
 
 # Plot
-
 ggplot(plot_data_melted, aes(x = Time, y = Value, color = Series)) +
   geom_point(data = subset(plot_data_melted, Series == "Actual"), size = 2) +  # Actual values as points
   geom_line(data = subset(plot_data_melted, Series != "Actual"), size = 1) +   # Fitted values as lines
@@ -1875,23 +2032,18 @@ ggplot(plot_data_melted, aes(x = Time, y = Value, color = Series)) +
     legend.position = "top",
     legend.title = element_blank()
   )
-
-
 ```
-
 
 ```{r}
 # Calculate RMSE for the fitted values
-# Calculate RMSE for each model
 rmse_auto_arima <- calculate_rmse(observed = sales_m_ts, predicted = fitted_auto_arima)
 rmse_arima1 <- calculate_rmse(observed = sales_m_ts, predicted = fitted_arima1)
 
 # Print RMSE values
 cat("RMSE for Auto ARIMA Model:", rmse_auto_arima, "\n")
 cat("RMSE for ARIMA(1,1,0) Model:", rmse_arima1, "\n")
-
-
 ```
+
 The RMSE of the Autoarima is better as is the AIC.
 
 The ARIMA(0,1,1) model can be described simply as a **random walk with
@@ -1914,20 +2066,21 @@ drift**. Here's what that means:
 3.  **MA (Moving Average) Part:**
 
     -   The third number, **1**, indicates the order of the moving
-        average part. 
+        average part.
 
 An ARIMA(0,1,1) model is suitable when:
 
-The d=1 parameter in ARIMA(0,1,1) indicates that the series is differenced once to achieve stationarity.
-Before differencing, the series may exhibit a linear trend or random walk behavior.
-After differencing, the series should show no trend and have relatively stable mean and variance
+The d=1 parameter in ARIMA(0,1,1) indicates that the series is
+differenced once to achieve stationarity. Before differencing, the
+series may exhibit a linear trend or random walk behavior. After
+differencing, the series should show no trend and have relatively stable
+mean and variance
 
-The q=1 in ARIMA(0,1,1) indicates that the series is modeled with a first-order moving average component after differencing.
-The autocorrelation function (ACF) of the differenced series should show:
-A significant spike at lag 1.
-Rapid decay to zero after lag 1.
-The partial autocorrelation function (PACF) should show no significant lags.
-
+The q=1 in ARIMA(0,1,1) indicates that the series is modeled with a
+first-order moving average component after differencing. The
+autocorrelation function (ACF) of the differenced series should show: A
+significant spike at lag 1. Rapid decay to zero after lag 1. The partial
+autocorrelation function (PACF) should show no significant lags.
 
 ```{r}
 # study residual to see if is a good model
@@ -1937,15 +2090,14 @@ tsdisplay(resid_autoarima_m)
 
 #### Weekly sales
 
-
-
 ```{r}
 # see if series is stationary
 adf.test(sales_w_ts) #H0, series is non-stationary
 # p-val > 0.05 => dont reject, non stationary: series is not stationary
 adf.test(diff(sales_w_ts)) # after diff is sationary
 ```
-After differencing, looks stationary
+
+After difference, looks stationary
 
 ```{r}
 tsdisplay(diff(sales_w_ts))
@@ -1954,11 +2106,9 @@ tsdisplay(diff(sales_w_ts))
 Correlograms suggest maybe AR 1 or MA 1.
 
 ```{r}
-### Manual ARIMA------------
 # ARIMA(p,d,q) = (1,1,0)
 arima1_w<- Arima(sales_w_ts, order=c(1,1,0))
 summary(arima1_w)
-
 ```
 
 ```{r}
@@ -1971,13 +2121,10 @@ AIC on the Autoarima is better, lets go with that one
 ```{r}
 checkresiduals(auto_arima_w)
 ```
+
 Residuals look stationary, see the plots for both models
 
 ```{r}
-# Fit ARIMA models for weekly data
-arima1_w <- Arima(sales_w_ts, order = c(1, 1, 0))
-auto_arima_w <- auto.arima(sales_w_ts)
-
 # Extract fitted values for both models
 fitted_arima1_w <- fitted(arima1_w)
 fitted_auto_arima_w <- fitted(auto_arima_w)
@@ -2025,11 +2172,10 @@ rmse_auto_arima_w <- calculate_rmse(observed = sales_w_ts, predicted = fitted_au
 cat("RMSE for ARIMA(1,1,0) Model (Weekly):", rmse_arima1_w, "\n")
 cat("RMSE for Auto ARIMA Model (Weekly):", rmse_auto_arima_w, "\n")
 ```
+
 The Auto-arima is also better in terms of RMSE
 
-
 #### Daily sales
-
 
 ```{r}
 # see if series is stationary
@@ -2037,21 +2183,23 @@ adf.test(sales_d_ts) #H0, series is non-stationary
 # p-val < 0.05 =>  reject non stationary: series might be stationary
 
 ```
-No need for differencing because is already stationary, try to model with arima
+
+No need for differencing because is suposedly already stationary, try to
+model with arima
 
 ```{r}
 tsdisplay(sales_d_ts)
 ```
 
-
-Autocorrelograms are not easy to interpret, but lets try with a baseline model
+Autocorrelograms are not easy to interpret, but lets try with a baseline
+model
 
 ```{r}
-# ARIMA(p,d,q) = (2,1,0)
+# ARIMA(p,d,q) = (1,0,1)
 arima1_d<- Arima(sales_d_ts, order=c(1,0,1))
 summary(arima1_d)
-
 ```
+
 ```{r}
 checkresiduals(arima1_d)
 ```
@@ -2065,13 +2213,12 @@ auto_arima_d <- auto.arima(sales_d_ts)
 summary(auto_arima_d)
 ```
 
-
 ```{r}
 checkresiduals(auto_arima_d)
 ```
 
-Rresiduals improve, and AIC is lower in the autoarima
-Check the fit for both models
+Rresiduals improve, and AIC is lower in the autoarima Check the fit for
+both models
 
 ```{r}
 # Extract fitted values for both models
@@ -2112,7 +2259,8 @@ ggplot(plot_data_melted, aes(x = Time, y = Value, color = Series)) +
   )
 ```
 
-Plot is not readable, but check the RMSE for both models to confirm wihch fits better
+Plot is not readable, but check the RMSE for both models to confirm
+which fits better
 
 ```{r}
 # Calculate RMSE for both models
@@ -2123,9 +2271,12 @@ rmse_auto_arima_d <- calculate_rmse(observed = sales_d_ts, predicted = fitted_au
 cat("RMSE for ARIMA(1,0,1) Model (Daily):", rmse_arima1_d, "\n")
 cat("RMSE for Auto ARIMA Model (Daily):", rmse_auto_arima_d, "\n")
 ```
-Autoarima is much better, now try to improve with seasonality, beacuse daily data looks seasonal each 7 days.
+
+Autoarima is much better, now try to improve with seasonality, because
+daily data looks seasonal each 7 days.
 
 ### SARIMA
+
 ```{r}
 # Daily sales
 tsdisplay(sales_d_ts) # 
@@ -2136,6 +2287,7 @@ tsdisplay(diff(sales_d_ts))
 sarima_d <- auto.arima(sales_d_ts, seasonal=TRUE)
 summary(sarima_d)
 ```
+
 ```{r}
 resid_ds<- residuals(sarima_d)
 tsdisplay(resid_ds)
@@ -2145,26 +2297,26 @@ Box.test(residuals(sarima_d), type="Ljung-Box")
 # A low p-value (<0.05) suggests residual autocorrelation.
 ```
 
-
-Looks like Aarima is the same in terms of AIC, lets check the RMSE:
+Looks like Arima is the same in terms of AIC, lets check the RMSE:
 
 ```{r}
-# Extract fitted values for both models
-
+# Extract fitted values
 fitted_sarima_d <- fitted(sarima_d)
 
-# Calculate RMSE for both models
+# Calculate RMSE
 rmse_sarima_d <- calculate_rmse(observed = sales_d_ts, predicted = fitted_sarima_d)
 
 # Print RMSE values
 cat("RMSE for Auto ARIMA Model (Daily):", rmse_auto_arima_d, "\n")
 cat("RMSE for Seasonal ARIMA Model (Daily):", rmse_sarima_d, "\n")
-
 ```
+
 The RMSE is exactly the same, they are the same model.
 
 ### SARIMAX
+
 Refine SARIMA with external regressors
+
 ```{r}
 # readefine sales_d_ts
 head(df_merged_d)
@@ -2183,10 +2335,7 @@ x_regressors_d <- as.matrix(x_regressors_d)
 
 ```
 
-
-
 ```{r}
-# fit the model on sales
 # Fit an auto.arima model with seasonal component and external regressors
 sarimax_model_d <- auto.arima(
   sales_d_ts,
@@ -2196,23 +2345,23 @@ sarimax_model_d <- auto.arima(
 
 # Display the summary of the fitted model
 summary(sarimax_model_d)
-
 ```
+
 The AIC actually decreases, lets check the RMSE
 
 ```{r}
-# Extract fitted values for all models
+# Extract fitted values
 fitted_sarimax_d <- fitted(sarimax_model_d)
 
-# Calculate RMSE for all models
+# Calculate RMSE 
 rmse_sarimax_d <- calculate_rmse(observed = sales_d_ts, predicted = fitted_sarimax_d)
 
 # Print RMSE values
 cat("RMSE for Auto ARIMA Model (Daily):", rmse_auto_arima_d, "\n")
 cat("RMSE for Seasonal ARIMA Model (Daily):", rmse_sarima_d, "\n")
 cat("RMSE for SARIMAX Model (Daily):", rmse_sarimax_d, "\n")
-
 ```
+
 The RMSE also worsens, so stay with regular Auto-ARIMA
 
 ### Exponential Smoothing methods
@@ -2220,8 +2369,6 @@ The RMSE also worsens, so stay with regular Auto-ARIMA
 #### Simple Exponential Smoothing
 
 ##### Monthly Sales
-
-Monthly Sales
 
 ```{r}
 fit_m1 <- ses(sales_m_ts, alpha = 0.2, initial = 'simple', h=5)
@@ -2262,19 +2409,16 @@ cat("RMSE for SES Model 2 (alpha = 0.6):", rmse_m2, "\n")
 cat("RMSE for SES Model 3 (Optimized alpha):", rmse_m3, "\n")
 
 ```
+
 ```{r}
 rmse_exp_sm_m <- rmse_m2
 ```
 
 ##### Weekly Sales
 
-Weekly Sales
-
 For weekly data, exponential smoothing can capture longer-term trends
 and seasonal patterns that repeat on a weekly basis. Weekly data can
 also have seasonal components related to months, quarters, or years.
-
-
 
 ```{r}
 fit_w1 <- ses(sales_w_ts, alpha = 0.2, initial = 'simple', h=5)
@@ -2311,15 +2455,13 @@ rmse_w3 <- calculate_rmse(observed = sales_w_ts, predicted = fitted_w3)
 cat("RMSE for SES Model 1 (alpha = 0.2):", rmse_w1, "\n")
 cat("RMSE for SES Model 2 (alpha = 0.6):", rmse_w2, "\n")
 cat("RMSE for SES Model 3 (Optimized alpha):", rmse_w3, "\n")
-
 ```
+
 ```{r}
 rmse_exp_sm_w <- rmse_w3
 ```
 
 ##### Daily sales
-
-Daily Sales
 
 For daily data, exponential smoothing can be used to forecast short-term
 trends and seasonal patterns. When applying exponential smoothing to
@@ -2330,7 +2472,6 @@ daily data, you need to consider:
 
 -   **Holidays and special events**: These can cause irregular patterns
     in daily data that may need to be accounted for.
-
 
 ```{r}
 
@@ -2370,37 +2511,33 @@ cat("RMSE for SES Model 2 (alpha = 0.6):", rmse_d2, "\n")
 cat("RMSE for SES Model 3 (Optimized alpha):", rmse_d3, "\n")
 
 ```
+
 ```{r}
 rmse_exp_sm_d <- rmse_d3
 ```
 
 ### GGM + SARMAX
 
-
 #### Monthly
+
 ```{r}
 
 # 1.  GGM on sales_m_ts
-
-
 summary(ggm1)
 
 
 # 2. Get the instantaneous fitted values of the GGM
-
-fitted_ggm_cum <- fitted(ggm1)
+fitted_ggm_cum <- fitted(ggm1) 
 fitted_ggm_instant <- make.instantaneous(fitted_ggm_cum)
 
 
 # 3. Auto-SARIMAX on cumsum(sales_m_ts), with xreg = instantaneous GGM
-
 # First, create the cumulative sales
 cumulative_sales_m_ts <- cumsum(sales_m_ts)
 
-
 sarima_m <- auto.arima(
   cumulative_sales_m_ts,
-  xreg         = fitted_ggm_instant,
+  xreg         = fitted_ggm_cum, # fitted_ggm_instant
   seasonal     = TRUE,
   stepwise     = FALSE,
   approximation= FALSE
@@ -2408,7 +2545,6 @@ sarima_m <- auto.arima(
 
 
 # 4. Extract the fitted (cumulative) values of the SARIMAX
-
 fitted_cum_sarima <- fitted(sarima_m)
 
 
@@ -2453,7 +2589,6 @@ legend(
 )
 ```
 
-
 ```{r}
 # Calculate RMSE for fitted_instantaneous_ts against sales_m_ts
 rmse_mixture_m <- calculate_rmse(observed = sales_m_ts, predicted = fitted_instant_sarima_ts)
@@ -2461,10 +2596,12 @@ rmse_mixture_m <- calculate_rmse(observed = sales_m_ts, predicted = fitted_insta
 # Print the RMSE value
 cat("RMSE for Fitted Instantaneous Values (GGM + SARIMAX):", rmse_mixture_m, "\n")
 ```
+
 ```{r}
 resid_mixture_m <- sales_m_ts - fitted_instant_sarima_ts
 tsdisplay(resid_mixture_m)
 ```
+
 Residuals have autocorrelation at lag 1
 
 #### Weekly
@@ -2490,7 +2627,7 @@ cumulative_sales_w_ts <- cumsum(sales_w_ts)
 
 sarima_w <- auto.arima(
   cumulative_sales_w_ts,
-  xreg         = fitted_ggm_instant,
+  xreg         = fitted_ggm_cum, #fitted_ggm_instant 
   seasonal     = TRUE,
   stepwise     = FALSE,
   approximation= FALSE
@@ -2574,8 +2711,6 @@ if (ljung_box_test$p.value > 0.05) {
 
 Stationary residuals but with significant correlation
 
-
-
 ```{r}
 #### RMSE for SARIMAX Predictions ####
 rmse_mixture_w <- calculate_rmse(observed = sales_w_ts, predicted = fitted_instant_sarima_ts)
@@ -2583,64 +2718,45 @@ rmse_mixture_w <- calculate_rmse(observed = sales_w_ts, predicted = fitted_insta
 # Print RMSE for SARIMAX
 cat("RMSE for SARIMAX Predictions:", rmse_mixture_w, "\n")
 ```
+
 #### Daily
 
 ```{r}
 # 1. GGM on sales_d_ts
-
 summary(ggm1_d)
 
 # 2. Get the instantaneous fitted values of the GGM
-
 fitted_ggm_cum <- fitted(ggm1_d)                 # Cumulative fit from GGM
 fitted_ggm_instant <- make.instantaneous(fitted_ggm_cum)  # Convert to daily flow
 
 # 3. Auto-SARIMAX on cumsum(sales_d_ts), with xreg = instantaneous GGM
-
 # Create the cumulative daily series
 cumulative_sales_d_ts <- cumsum(sales_d_ts)
 
-
-# first scale data so it can converge
-
-cumulative_sales_d_ts <- scale(cumulative_sales_d_ts)
-fitted_ggm_instant <- scale(fitted_ggm_instant)
-
-# Scale the data
-cumulative_sales_center <- attr(cumulative_sales_d_ts, "scaled:center")
-cumulative_sales_scale <- attr(cumulative_sales_d_ts, "scaled:scale")
-ggm_instant_center <- attr(fitted_ggm_instant, "scaled:center")
-ggm_instant_scale <- attr(fitted_ggm_instant, "scaled:scale")
-
-
+# Fit the SARIMAX model
 sarima_d <- auto.arima(
   cumulative_sales_d_ts,
-  xreg = fitted_ggm_instant,
-  stepwise = TRUE,
-  approximation = TRUE
+  xreg = fitted_ggm_cum,
+  seasonal = TRUE,
+  stepwise = FALSE,
+  approximation = FALSE
 )
 
-
-
 # 4. Extract the fitted (cumulative) values of the SARIMAX
-
-# Fitted cumulative values (scaled)
+# Fitted cumulative values
 fitted_cum_sarima <- fitted(sarima_d)
 
-# Scale back to original cumulative values
-fitted_cum_sarima_original <- fitted_cum_sarima * cumulative_sales_scale + cumulative_sales_center
+# Convert cumulative fitted values to instantaneous fitted values
+fitted_instant_sarima <- diff(c(0, fitted_cum_sarima))
 
-# Convert cumulative fitted to instantaneous fitted (original units)
-fitted_instant_sarima_original <- diff(c(0, fitted_cum_sarima_original))
-
-# Create time series object for instantaneous fitted values
-fitted_instant_sarima_original_ts <- ts(
-  fitted_instant_sarima_original,
+# Turn it into a time series object
+fitted_instant_sarima_ts <- ts(
+  fitted_instant_sarima,
   start = start(sales_d_ts),
   frequency = frequency(sales_d_ts)
 )
 
-# Plot the results
+# 5. Plot the actual daily sales and the SARIMAX instantaneous fit
 plot(
   sales_d_ts,
   type = "o",
@@ -2652,7 +2768,7 @@ plot(
 )
 
 lines(
-  fitted_instant_sarima_original_ts,
+  fitted_instant_sarima_ts,
   col = "red",
   lty = 2,
   lwd = 2
@@ -2665,7 +2781,10 @@ legend(
   lty    = c(1, 2),
   lwd    = c(2, 2)
 )
+
 ```
+
+
 
 ```{r}
 #### Residuals-----------------------
@@ -2699,12 +2818,11 @@ if (ljung_box_test$p.value > 0.05) {
 
 ```{r}
 #### RMSE for SARIMAX Predictions ####
-rmse_mixture_d <- calculate_rmse(observed = sales_d_ts, predicted = fitted_instant_sarima_original_ts)
+rmse_mixture_d <- calculate_rmse(observed = sales_d_ts, predicted = fitted_instant_sarima_ts)
 
 # Print RMSE for SARIMAX
 cat("RMSE for SARIMAX Predictions:", rmse_mixture_d, "\n")
 ```
-
 
 ### Prophet
 
@@ -2810,7 +2928,9 @@ rmse_prophet_m <- calculate_rmse(observed = actual_y, predicted = fitted_y)
 # Print RMSE
 cat("RMSE for Prophet Fitted Values:", rmse_prophet_m, "\n")
 ```
+
 Residuals for prophet
+
 ```{r}
 # Calculate Residuals
 residuals_prophet <- actual_y - fitted_y  # Residuals = Actual - Fitted
@@ -2841,7 +2961,6 @@ if (ljung_box_test$p.value > 0.05) {
 }
 
 ```
-
 
 #### Weekly
 
@@ -3004,7 +3123,6 @@ prophet_plot_components(prophet_sales_d, forecast_sales_d)
 dyplot.prophet(prophet_sales_d, forecast_sales_d)
 ```
 
-
 ```{r}
 # Extract fitted values for RMSE calculation
 fitted_values_d <- predict(prophet_sales_d, df_prophet_d)
@@ -3019,7 +3137,6 @@ rmse_prophet_d <- calculate_rmse(observed = actual_y_d, predicted = fitted_y_d)
 # Print RMSE
 cat("RMSE for Prophet Fitted Values (Daily):", rmse_prophet_d, "\n")
 ```
-
 
 ```{r}
 # Calculate Residuals
@@ -3052,8 +3169,6 @@ if (ljung_box_test_d$p.value > 0.05) {
 
 ```
 
-
-
 ```{r}
 rmse_list <- c(rmse_ols_m, rmse_ols_w, rmse_ols_d,
                rmse_bm_m, rmse_bm_w, rmse_bm_d,
@@ -3068,7 +3183,9 @@ rmse_list <- c(rmse_ols_m, rmse_ols_w, rmse_ols_d,
                )
 rmse_list
 ```
+
 ## Evaluation of all models
+
 ```{r}
 # Initialize an empty data frame for RMSE values
 rmse_table <- data.frame(
@@ -3132,17 +3249,20 @@ print(rmse_table)
 
 Best models are:
 
-* Monthly: GGM 
-* Weekly: Prophet
-* Daily: Prophet
+-   Monthly: GGM
+-   Weekly: Prophet
+-   Daily: Prophet
 
 ## Evaluation of best models on Test Set
+
 ### Import test set
+
 ```{r}
 # target variable
 test_sales_df <- read_excel("data/sales/test_data.xlsx")
 head(test_sales_df)
 ```
+
 ```{r}
 df_sales_m_test <- test_sales_df %>%
   mutate(month = floor_date(date, "month")) %>% # Extract month
@@ -3152,6 +3272,7 @@ df_sales_m_test <- test_sales_df %>%
 
 head(df_sales_m_test)
 ```
+
 ```{r}
 ## sales weekly
 df_sales_w_test <- test_sales_df %>%
@@ -3161,11 +3282,13 @@ df_sales_w_test <- test_sales_df %>%
 
 head(df_sales_w_test)
 ```
+
 ## Forecast vs Actual
+
 ### Montly
 
-
 #### GGM
+
 ```{r}
 # Length of historical data
 N <- length(sales_m_ts)
@@ -3228,8 +3351,12 @@ legend(
   lwd = c(2, 2, 2)
 )
 ```
-The forecast of the GGM looks like the restaurant is loosing grip, actually restaurants can do well for way longer than the estimated period by the GGM. So we take this as a downside scenario forecast.
-But lets try to forecast a baseline scenario, with the second best model: the Holt-Winters.
+
+The forecast of the GGM looks like the restaurant is loosing grip,
+actually restaurants can do well for way longer than the estimated
+period by the GGM. So we take this as a downside scenario forecast. But
+lets try to forecast a baseline scenario, with the second best model:
+the Holt-Winters.
 
 #### Holt-Winters: Multiplicative
 
@@ -3248,6 +3375,7 @@ autoplot(forecast_hw) +
   ylab("Monthly Sales") +
   theme_minimal()
 ```
+
 ```{r}
 # Compare actual vs forecasted
 actual_sales_m <- df_sales_m_test$sales_m
@@ -3258,7 +3386,9 @@ rmse_test_ggm <- calculate_rmse(actual_sales_m, forecasted_ggm)
 cat("Error Holt-Winters:", rmse_test_hw, "\n")
 cat("Error GGM:", rmse_test_ggm, "\n")
 ```
-The GGM error is lower, we can do a combination (smoothing) of both scenarios for the final forecast
+
+The GGM error is lower, we can do a combination (smoothing) of both
+scenarios for the final forecast
 
 ```{r}
 # Combine the actual and forecasted data into a data frame
@@ -3271,6 +3401,8 @@ plot_data <- data.frame(
 
 plot_data_melt <- melt(plot_data, id.vars = "Period", variable.name = "Type", value.name = "Sales")
 
+# change this plot to something in style of the report
+
 # Create a plot
 ggplot(plot_data_melt, aes(x = Period, y = Sales, fill = Type)) +
   geom_bar(stat = "identity", position = "dodge") +
@@ -3282,8 +3414,8 @@ ggplot(plot_data_melt, aes(x = Period, y = Sales, fill = Type)) +
 
 ```
 
-
 ### Weekly
+
 #### Prophet
 
 ```{r}
@@ -3318,7 +3450,9 @@ legend("topright",
 ```
 
 ### Daily
+
 #### Prophet
+
 ```{r}
 # Filter forecast for November and December 2024
 forecast_nov_dec_d <- forecast_sales_d %>%
@@ -3347,13 +3481,17 @@ legend("topright",
        lwd = c(NA, 2))                      # Line width for the forecast
 
 ```
+
 ## Forecast with Best Models
-Finally, we want to use the long term forecast, so we can use the monthly combination of models for that.
-### Montly
+
+Finally, we want to use the long term forecast, so we can use the
+monthly combination of models for that. \### Montly
+
 ```{r}
 long_term_forecasted_hw <- forecast_hw$mean
 long_term_forecasted_ggm <- ggm_future_inst_ts
 ```
+
 ```{r}
 # Define the date ranges for both series
 dates_hw <- seq(as.Date("2024-11-01"), as.Date("2026-10-01"), by = "month")
@@ -3373,6 +3511,3 @@ df_merged$Mean <- rowMeans(df_merged[, c("Value_hw", "Value_ggm")], na.rm = TRUE
 long_term_forecast <- data.frame(Date = df_merged$Date, Mean = df_merged$Mean)
 plot(long_term_forecast)
 ```
-
-
-
