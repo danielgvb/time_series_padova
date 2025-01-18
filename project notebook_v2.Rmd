@@ -2516,7 +2516,7 @@ cat("RMSE for SES Model 3 (Optimized alpha):", rmse_d3, "\n")
 rmse_exp_sm_d <- rmse_d3
 ```
 
-### GGM + SARMAX
+### GGM + SARMA
 
 #### Monthly
 
@@ -2537,7 +2537,7 @@ cumulative_sales_m_ts <- cumsum(sales_m_ts)
 
 sarima_m <- auto.arima(
   cumulative_sales_m_ts,
-  xreg         = fitted_ggm_cum, # fitted_ggm_instant
+  xreg         = fitted_ggm_cum, 
   seasonal     = TRUE,
   stepwise     = FALSE,
   approximation= FALSE
@@ -3253,6 +3253,54 @@ Best models are:
 -   Weekly: Prophet
 -   Daily: Prophet
 
+```{r}
+
+```
+
+```{r}
+# PLot RMSE
+
+# Transform the data to long format
+rmse_long <- rmse_table %>%
+  pivot_longer(cols = Monthly:Daily, names_to = "Time_Resolution", values_to = "RMSE") %>%
+  drop_na() # Remove rows with NA values
+
+# Define base colors for each Time_Resolution
+base_colors <- c("Monthly" = "black", "Weekly" = "blue", "Daily" = "red")
+
+# Assign dynamic shades for each Time_Resolution and bold the lowest RMSE model
+rmse_long <- rmse_long %>%
+  group_by(Time_Resolution) %>%
+  mutate(
+    Fill_Color = scales::alpha(
+      base_colors[Time_Resolution],
+      seq(0.3, 1, length.out = n())
+    ),
+    Label = ifelse(RMSE == min(RMSE, na.rm = TRUE),
+                   paste0("**", Model, "**"),  # Bold the model with lowest RMSE
+                   Model)
+  ) %>%
+  ungroup()
+
+# Create the bar plot
+ggplot(rmse_long, aes(x = Time_Resolution, y = RMSE, fill = Fill_Color)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8)) +
+  geom_text(aes(label = Label), 
+            position = position_dodge(width = 0.8), 
+            vjust = -0.5, 
+            size = 3,
+            angle = 45,  # Tilt the model names
+            hjust = 1) +  # Adjust alignment for tilted text
+  scale_fill_identity() +
+  labs(
+    title = "Comparison of RMSE Across Models",
+    x = "Time Resolution",
+    y = "RMSE"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5))
+```
+
 ## Evaluation of best models on Test Set
 
 ### Import test set
@@ -3400,19 +3448,49 @@ plot_data <- data.frame(
 )
 
 plot_data_melt <- melt(plot_data, id.vars = "Period", variable.name = "Type", value.name = "Sales")
+```
 
-# change this plot to something in style of the report
+```{r}
+# Plot the historical sales data for 2024
+plot(
+  window(sales_m_ts, start = c(2024, 1), end = c(2024, 12)),
+  type = "o",
+  col = "black",
+  lwd = 2,
+  main = "Sales Forecasts for Nov - Dec 2024",
+  xlab = "Time (Months)",
+  ylab = "Monthly Sales",
+  xlim = c(2024, 2024 + 11 / 12)  # Restrict to 2024
+)
 
-# Create a plot
-ggplot(plot_data_melt, aes(x = Period, y = Sales, fill = Type)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  labs(title = "Actual vs Forecasted Sales",
-       x = "Period",
-       y = "Sales",
-       fill = "Type") +
-  theme_minimal()
+# Add the GGM forecast for November and December 2024 (Red dashed line)
+lines(
+  window(ggm_future_inst_ts, start = c(2024, 11), end = c(2024, 12)),
+  col = "red",
+  lty = 2,  # Dashed line
+  lwd = 2
+)
+
+# Add the Holt-Winters forecast for November and December 2024 (Blue dotted line)
+lines(
+  window(forecast_hw$mean, start = c(2024, 11), end = c(2024, 12)),
+  col = "blue",
+  lty = 3,  # Dotted line
+  lwd = 2
+)
+
+# Add a legend
+legend(
+  "topleft",
+  legend = c("Original Sales", "GGM Forecast", "Holt-Winters Forecast"),
+  col = c("black", "red", "blue"),
+  lty = c(1, 2, 3),  # Line styles match plot
+  lwd = c(2, 2, 2)
+)
+
 
 ```
+
 
 ### Weekly
 
@@ -3509,5 +3587,16 @@ df_merged$Mean <- rowMeans(df_merged[, c("Value_hw", "Value_ggm")], na.rm = TRUE
 
 # Create the new time series
 long_term_forecast <- data.frame(Date = df_merged$Date, Mean = df_merged$Mean)
-plot(long_term_forecast)
+
+
+# Plot the actual sales with black dots
+plot(as.Date(long_term_forecast$Date), long_term_forecast$Mean,
+     type = "l",                             # Points for actual sales
+     lwd = 2,
+     pch = 16,                               # Solid circles
+     col = "blue",                          # Black color for points
+     xlab = "Date",                          # X-axis label
+     ylab = "Sales",                         # Y-axis label
+     main = " Forecasted Sales (Oct 2024 -Oct 2026)")  # Title
+
 ```
