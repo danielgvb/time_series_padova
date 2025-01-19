@@ -948,8 +948,10 @@ combined_stats <- merge(model_stats, rmse_stats, by = "Model")
 
 # View the combined table
 print(combined_stats)
+```
 
-
+```{r}
+summary(ols2_stepwise)
 ```
 
 ```{r}
@@ -2784,8 +2786,6 @@ legend(
 
 ```
 
-
-
 ```{r}
 #### Residuals-----------------------
 # Extract residuals from the SARIMA model
@@ -3490,7 +3490,6 @@ legend(
 
 
 ```
-
 
 ### Weekly
 
